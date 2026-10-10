@@ -3,7 +3,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef VERSION
-!define VERSION "0.2.4"
+!define VERSION "0.2.5"
 !endif
 Name "LinkLAN"
 OutFile "${OUTPUT}"
