@@ -1,0 +1,24 @@
+name: linklan-tests
+services:
+  test-db:
+    image: postgres:17-alpine
+    environment: {POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: test}
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U test -d test"]
+      interval: 2s
+      retries: 30
+  tests:
+    image: golang:1.26.8-bookworm
+    working_dir: /src
+    volumes: [".:/src:ro"]
+    environment:
+      LINKLAN_TEST_DATABASE: postgres://test:test@test-db:5432/test?sslmode=disable
+      CGO_ENABLED: "0"
+      GOTELEMETRY: "off"
+      GOTOOLCHAIN: local
+      GOPROXY: "off"
+      GOSUMDB: "off"
+    command: [go, test, -mod=vendor, -buildvcs=false, -count=1, -v, ./...]
+    depends_on:
+      test-db: {condition: service_healthy}

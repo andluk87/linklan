@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: linklan-api
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 8080
+  - job_name: linklan-relay
+    static_configs:
+      - targets: [relay:9091]

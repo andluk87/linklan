@@ -1,0 +1,17 @@
+LinkLAN 0.2.0 — update archive build verification
+
+Go 1.26.8; CGO_ENABLED=0; GOPROXY=off; GOSUMDB=off; -mod=vendor.
+Checks were run from fresh extraction directories, rather than the source tree.
+
+Original update ZIP: reproduced undefined: language.Builder (build exit 1).
+Original update + compose.go restored from its included source ZIP: API build PASS.
+Corrected update ZIP: Linux API build PASS; Linux relay build PASS.
+Corrected update ZIP: Windows x64 client cross-build PASS.
+Rebuilt Windows client SHA-256 equals the published client EXE.
+Corrected update ZIP: go test ./... PASS.
+PostgreSQL integration tests skipped without LINKLAN_TEST_DATABASE.
+Docker daemon and Windows runtime were unavailable; no container/runtime QA claimed.
+
+Packaging preserves exact root Compose filenames and .env.
+scripts/package-update.py verifies source inventory, bytes and ZIP CRC.
+vendor/golang.org/x/text/internal/language/compose.go is included.

@@ -1,0 +1,13 @@
+services:
+  web:
+    profiles: [website]
+  api-gateway:
+    image: nginx:1.30.5-alpine
+    command: [nginx, -c, /etc/linklan/nginx.conf, -g, "daemon off;"]
+    ports: ["8191:8443/tcp"]
+    volumes:
+      - ./deploy/nginx/api-only.conf:/etc/linklan/nginx.conf:ro
+      - ./deploy/certs:/etc/linklan/certs:ro
+    depends_on: [api]
+    restart: unless-stopped
+    networks: [backend]

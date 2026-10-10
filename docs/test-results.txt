@@ -1,0 +1,73 @@
+?   	linklan/cmd/client	[no test files]
+?   	linklan/cmd/relay	[no test files]
+?   	linklan/cmd/release	[no test files]
+?   	linklan/cmd/server	[no test files]
+=== RUN   TestPassword
+--- PASS: TestPassword (1.04s)
+=== RUN   TestTokens
+--- PASS: TestTokens (0.00s)
+PASS
+ok  	linklan/internal/auth	1.052s
+=== RUN   TestNetworkAuthorizationAndIPAllocation
+    integration_test.go:101: LINKLAN_TEST_DATABASE not set: PostgreSQL integration test requires a disposable test database
+--- SKIP: TestNetworkAuthorizationAndIPAllocation (0.00s)
+=== RUN   TestRefreshReplayRevokesEntireFamily
+    integration_test.go:139: LINKLAN_TEST_DATABASE not set: PostgreSQL integration test requires a disposable test database
+--- SKIP: TestRefreshReplayRevokesEntireFamily (0.00s)
+=== RUN   TestApprovalAndAdminRole
+    integration_test.go:159: LINKLAN_TEST_DATABASE not set: PostgreSQL integration test requires a disposable test database
+--- SKIP: TestApprovalAndAdminRole (0.00s)
+PASS
+ok  	linklan/internal/backend	0.018s
+?   	linklan/internal/desktop	[no test files]
+?   	linklan/internal/model	[no test files]
+=== RUN   TestEncryptedDatagram
+--- PASS: TestEncryptedDatagram (0.00s)
+=== RUN   TestUnauthenticatedPacketDoesNotConsumeSequence
+--- PASS: TestUnauthenticatedPacketDoesNotConsumeSequence (0.00s)
+=== RUN   TestHeaderAndSessionAuthenticated
+--- PASS: TestHeaderAndSessionAuthenticated (0.00s)
+=== RUN   TestReplayReordering
+--- PASS: TestReplayReordering (0.00s)
+=== RUN   TestReplayWindowAgainstReference
+--- PASS: TestReplayWindowAgainstReference (0.00s)
+=== RUN   TestMTUAndIPv4SpoofBoundaries
+--- PASS: TestMTUAndIPv4SpoofBoundaries (0.00s)
+=== RUN   TestRelayEnvelope
+--- PASS: TestRelayEnvelope (0.00s)
+=== RUN   FuzzParse
+=== RUN   FuzzParse/seed#0
+=== RUN   FuzzParse/seed#1
+--- PASS: FuzzParse (0.00s)
+    --- PASS: FuzzParse/seed#0 (0.00s)
+    --- PASS: FuzzParse/seed#1 (0.00s)
+PASS
+ok  	linklan/internal/protocol	0.020s
+=== RUN   TestRelayAuthenticatedForwardingAndReplay
+--- PASS: TestRelayAuthenticatedForwardingAndReplay (0.01s)
+=== RUN   TestCookieBoundToEndpoint
+--- PASS: TestCookieBoundToEndpoint (0.00s)
+PASS
+ok  	linklan/internal/relay	0.016s
+=== RUN   TestBinding
+--- PASS: TestBinding (0.00s)
+=== RUN   FuzzSTUN
+=== RUN   FuzzSTUN/seed#0
+--- PASS: FuzzSTUN (0.00s)
+    --- PASS: FuzzSTUN/seed#0 (0.00s)
+PASS
+ok  	linklan/internal/stun	0.008s
+=== RUN   TestPresenceFlapNeverReusesNonce
+--- PASS: TestPresenceFlapNeverReusesNonce (0.00s)
+=== RUN   TestPeerEphemeralIdentityProof
+--- PASS: TestPeerEphemeralIdentityProof (0.00s)
+=== RUN   TestServerTLSAndEndpointValidation
+--- PASS: TestServerTLSAndEndpointValidation (0.00s)
+PASS
+ok  	linklan/internal/tunnel	0.013s
+=== RUN   TestSignedManifest
+--- PASS: TestSignedManifest (0.00s)
+=== RUN   TestNoDowngrade
+--- PASS: TestNoDowngrade (0.00s)
+PASS
+ok  	linklan/internal/updates	0.018s

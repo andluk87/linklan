@@ -1,0 +1,17 @@
+LinkLAN 0.2.1 — проверка сборки
+
+Выполнено:
+- go test -mod=vendor -buildvcs=false ./...: PASS.
+- go vet -mod=vendor -buildvcs=false ./...: PASS.
+- Windows amd64 EXE с native UI, Wintun и ICMP API: cross-build PASS.
+- Тесты исключения своего ПК без изменения membership, границ ICMP-индикаторов,
+  разбора ответов ICMP и области действия/отказа firewall rules: PASS.
+- Из распакованного update ZIP: Linux API/relay и Windows x64 client build PASS.
+- EXE, повторно собранный из update ZIP, побайтово равен опубликованному.
+- Полный vendor, сохранение .env/Compose, ZIP CRC, версия manifest и локальные
+  ссылки лендинга: PASS.
+
+Среда: Go 1.26.8, CGO_ENABLED=0, сборка из vendor без загрузки Go-модулей.
+Интеграция PostgreSQL пропущена без тестовой БД. Docker daemon, Windows runtime
+и реальные два Windows-ПК здесь недоступны. Сценарии такой проверки перечислены
+в docs/ACCEPTANCE.md. Результаты сборки не заменяют Windows runtime QA.

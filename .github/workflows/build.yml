@@ -1,0 +1,106 @@
+name: Test and build LinkLAN
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+      LINKLAN_TEST_DATABASE: postgres://test:test@localhost:5432/test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.8'
+          cache: true
+      - run: go test -mod=vendor -buildvcs=false -count=1 -v ./...
+      - run: go vet -mod=vendor -buildvcs=false ./...
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.8'
+          cache: true
+      - name: Read and verify release version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location('build_client', 'scripts/build-client.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          version = module.release_version()
+          if os.environ['REF_TYPE'] == 'tag' and os.environ['REF_NAME'] != 'v' + version:
+              raise SystemExit('Tag must match release-version')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('version=' + version + '\n')
+          PY
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nsis
+      - run: python3 scripts/build-client.py --installer
+      - run: python3 scripts/publish-downloads.py && python3 scripts/package-update.py
+      - name: Collect downloadable artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p artifacts
+          cp "releases/LinkLAN-Windows-x64-v${VERSION}.zip" artifacts/
+          cp "releases/LinkLAN-Setup-x64-v${VERSION}.exe" artifacts/
+          cp "web/downloads/LinkLAN-source-v${VERSION}.zip" artifacts/
+          cp "web/downloads/LinkLAN-update-v${VERSION}.zip" artifacts/
+          cp releases/latest.json artifacts/
+          cd artifacts
+          sha256sum *.zip *.exe > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LinkLAN-v${{ steps.version.outputs.version }}
+          path: artifacts/
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LinkLAN-v${{ needs.build.outputs.version }}
+          path: artifacts
+      - name: Publish versioned files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" artifacts/* --verify-tag --title "LinkLAN $TAG" --generate-notes

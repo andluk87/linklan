@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.26.8-bookworm AS build
+ENV GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOTELEMETRY=off
+WORKDIR /src
+COPY . .
+# Dependencies are shipped in vendor; compilation has no network access.
+RUN --network=none CGO_ENABLED=0 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o /out/linklan-server ./cmd/server \
+ && CGO_ENABLED=0 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o /out/linklan-relay ./cmd/relay
+FROM gcr.io/distroless/static-debian12:nonroot AS api
+WORKDIR /app
+COPY --from=build /out/linklan-server /app/linklan-server
+COPY docs/THIRD_PARTY_NOTICES.txt /app/THIRD_PARTY_NOTICES.txt
+EXPOSE 8080
+USER nonroot:nonroot
+ENTRYPOINT ["/app/linklan-server"]
+FROM gcr.io/distroless/static-debian12:nonroot AS relay
+WORKDIR /app
+COPY --from=build /out/linklan-relay /app/linklan-relay
+COPY docs/THIRD_PARTY_NOTICES.txt /app/THIRD_PARTY_NOTICES.txt
+EXPOSE 3478/udp 51820/udp 9091
+USER nonroot:nonroot
+ENTRYPOINT ["/app/linklan-relay"]

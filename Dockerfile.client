@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+# Linux Docker builds native Windows x64 EXE with CGO disabled.
+FROM golang:1.26.8-bookworm AS build
+ENV GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOTELEMETRY=off
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip nsis && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+ARG UPDATE_PUBLIC_KEY=""
+ARG VERSION=""
+RUN --network=none VERSION="${VERSION:-$(cat release-version)}" && mkdir -p /out/portable \
+ && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -mod=vendor -buildvcs=false -trimpath -ldflags="-H=windowsgui -s -w -X linklan/internal/updates.PublicKey=${UPDATE_PUBLIC_KEY} -X linklan/internal/model.Version=${VERSION}" -o /out/portable/LinkLAN.exe ./cmd/client
+RUN VERSION="${VERSION:-$(cat release-version)}" && curl -fL https://www.wintun.net/builds/wintun-0.14.1.zip -o /tmp/wintun.zip \
+ && echo '07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51  /tmp/wintun.zip' | sha256sum -c - \
+ && unzip -q /tmp/wintun.zip -d /tmp/wintun \
+ && cp /tmp/wintun/wintun/bin/amd64/wintun.dll /out/portable/ \
+ && cp /tmp/wintun/wintun/LICENSE.txt /out/portable/WINTUN-LICENSE.txt \
+ && cp docs/THIRD_PARTY_NOTICES.txt /out/portable/ \
+ && cp docs/CLIENT.txt /out/portable/README.txt \
+ && cp scripts/Run-LinkLAN.cmd /out/portable/ \
+ && makensis -DVERSION=${VERSION} -DBUNDLE=/out/portable -DOUTPUT=/out/LinkLAN-Setup-x64-v${VERSION}.exe scripts/installer.nsi
+RUN --network=none --mount=type=secret,id=update_signing_key,required=false \
+ VERSION="${VERSION:-$(cat release-version)}" && CGO_ENABLED=0 go run -mod=vendor -buildvcs=false ./cmd/release -bundle /out/portable -output /out -version ${VERSION} -key-file /run/secrets/update_signing_key
+FROM scratch AS artifacts
+COPY --from=build /out/ /

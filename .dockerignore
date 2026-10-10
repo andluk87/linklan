@@ -1,0 +1,16 @@
+.git
+.env
+releases
+*.key
+*.pfx
+coverage.out
+.env.*
+!.env.example
+web/downloads
+__pycache__
+deploy/certs
+backups
+artifacts
+*.pem
+*.p12
+*.dpapi

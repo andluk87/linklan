@@ -1,0 +1,1091 @@
+# Техническое задание на разработку виртуальной LAN/VPN-системы
+
+## 1. Назначение продукта
+
+Разработать программный продукт, позволяющий объединять компьютеры пользователей через интернет в виртуальную локальную сеть.
+
+После подключения к одной виртуальной сети устройства должны взаимодействовать так, как если бы они находились в одной физической LAN-сети.
+
+Основные сценарии использования:
+
+- игры по LAN через интернет;
+- доступ к локальным сервисам и серверам;
+- удалённая разработка и тестирование;
+- объединение компьютеров сотрудников в единую виртуальную сеть;
+- доступ к IP-сервисам между устройствами;
+- создание приватных сетей между несколькими компьютерами.
+
+Продукт должен быть ориентирован в первую очередь на Windows, с возможностью последующего добавления macOS и Linux.
+
+---
+
+# 2. Общая архитектура
+
+Система должна состоять из следующих компонентов:
+
+1. Desktop Client.
+2. Virtual Network Adapter.
+3. VPN/Tunneling Engine.
+4. Coordination / Signaling Server.
+5. NAT Traversal Service.
+6. Relay Server.
+7. Backend API.
+8. Authentication Service.
+9. Network Management Service.
+10. Admin Panel.
+11. Monitoring / Logging System.
+
+Архитектура должна поддерживать горизонтальное масштабирование серверной части.
+
+---
+
+# 3. Принцип работы
+
+После установки клиентского приложения:
+
+1. Создаётся виртуальный сетевой адаптер.
+2. Пользователь авторизуется.
+3. Пользователь создаёт виртуальную сеть либо подключается к существующей.
+4. Клиент получает виртуальный IPv4-адрес.
+5. Сервер сообщает клиентам адреса других участников сети.
+6. Клиенты пытаются установить прямое P2P-соединение.
+7. Если прямое соединение невозможно, трафик передаётся через relay-сервер.
+8. Весь трафик между участниками сети должен быть зашифрован.
+
+Приоритет маршрутизации:
+
+P2P UDP  
+↓  
+P2P TCP, если предусмотрено архитектурой  
+↓  
+Relay server
+
+---
+
+# 4. Клиентское приложение
+
+## 4.1. Поддерживаемые ОС
+
+MVP:
+
+- Windows 10;
+- Windows 11;
+- x64.
+
+Перспектива:
+
+- Windows ARM;
+- macOS;
+- Linux.
+
+---
+
+# 5. Основные функции клиента
+
+Клиент должен предоставлять следующие возможности.
+
+## 5.1. Авторизация
+
+Поддержать:
+
+- email + пароль;
+- восстановление пароля;
+- refresh/access token;
+- выход из аккаунта.
+
+В дальнейшем возможно добавление:
+
+- Google;
+- Microsoft;
+- Apple;
+- GitHub.
+
+---
+
+## 5.2. Создание сети
+
+Пользователь может создать новую виртуальную сеть.
+
+Параметры:
+
+- название сети;
+- пароль сети или invite token;
+- максимальное количество участников;
+- режим доступа;
+- описание сети.
+
+Режимы:
+
+- приватная;
+- доступ по паролю;
+- доступ по invite-link;
+- доступ только после подтверждения владельцем.
+
+---
+
+## 5.3. Подключение к сети
+
+Для подключения пользователь вводит:
+
+- Network ID / имя сети;
+- пароль или invite token.
+
+После успешного подключения сеть появляется в интерфейсе клиента.
+
+---
+
+## 5.4. Список участников
+
+Для каждого устройства отображать:
+
+- имя устройства;
+- имя пользователя;
+- виртуальный IP;
+- статус online/offline;
+- latency;
+- тип соединения;
+- P2P / Relay;
+- дата последней активности.
+
+Опционально:
+
+- реальный регион;
+- версия клиента;
+- операционная система.
+
+---
+
+# 6. Виртуальная сеть
+
+Каждая виртуальная сеть должна иметь собственный виртуальный IP-subnet.
+
+Например:
+
+10.100.X.0/24
+
+или диапазон:
+
+10.0.0.0/8.
+
+Каждому устройству назначается постоянный или временный виртуальный IP.
+
+Пример:
+
+PC-1 → 10.100.15.2  
+PC-2 → 10.100.15.3  
+PC-3 → 10.100.15.4
+
+IP-адрес должен быть уникален внутри конкретной виртуальной сети.
+
+---
+
+# 7. Virtual Network Adapter
+
+На Windows приложение должно устанавливать виртуальный сетевой интерфейс.
+
+Допустимые варианты реализации:
+
+- Wintun;
+- собственный NDIS-драйвер;
+- иной Windows Virtual Network Adapter.
+
+Предпочтительный вариант для MVP — Wintun.
+
+Виртуальный интерфейс должен:
+
+- принимать IP-пакеты ОС;
+- передавать их VPN Engine;
+- получать удалённые IP-пакеты;
+- передавать их обратно в сетевой стек Windows.
+
+---
+
+# 8. VPN Engine
+
+VPN Engine отвечает за:
+
+- чтение трафика из виртуального интерфейса;
+- шифрование;
+- определение удалённого peer;
+- выбор маршрута;
+- передачу пакетов;
+- приём пакетов;
+- дешифрование;
+- запись пакетов в виртуальный интерфейс.
+
+Engine желательно реализовать как отдельный системный сервис.
+
+---
+
+# 9. Протокол транспортировки
+
+Основной транспорт:
+
+UDP.
+
+Каждый пакет должен содержать служебный заголовок.
+
+Пример:
+
+Version  
+Packet Type  
+Source Peer ID  
+Destination Peer ID  
+Sequence Number  
+Payload Length  
+Encrypted Payload
+
+Необходимо предусмотреть:
+
+- replay protection;
+- packet authentication;
+- packet ordering там, где это необходимо;
+- fragmentation / MTU handling;
+- keepalive;
+- connection timeout.
+
+---
+
+# 10. Шифрование
+
+Трафик должен быть end-to-end encrypted.
+
+Рекомендуемые алгоритмы:
+
+- ChaCha20-Poly1305;
+- AES-256-GCM.
+
+Для обмена ключами:
+
+- X25519;
+- Curve25519;
+- либо Noise Protocol Framework.
+
+Сервер управления не должен иметь возможности расшифровывать P2P-трафик пользователей.
+
+Каждое устройство должно иметь уникальную пару ключей:
+
+- private key;
+- public key.
+
+Private key хранится только на устройстве пользователя.
+
+---
+
+# 11. NAT Traversal
+
+Система должна уметь устанавливать прямое соединение между устройствами за NAT.
+
+Необходимо реализовать:
+
+- UDP hole punching;
+- STUN;
+- определение external IP;
+- определение external UDP port;
+- connection negotiation.
+
+Необходимо учитывать:
+
+- Full Cone NAT;
+- Restricted NAT;
+- Port Restricted NAT;
+- Symmetric NAT;
+- CGNAT.
+
+При невозможности P2P-соединения должен использоваться relay.
+
+---
+
+# 12. Signaling / Coordination Server
+
+Coordination Server отвечает за:
+
+- авторизацию устройства;
+- регистрацию online-сессии;
+- хранение информации о peer;
+- обмен connection metadata;
+- передачу peer endpoint;
+- передачу public key;
+- сетевые события;
+- health-check клиентов.
+
+Пример информации о peer:
+
+Peer ID  
+Virtual IP  
+Public Key  
+External IP  
+External Port  
+Local IP  
+Connection Status  
+Client Version
+
+Signaling Server не должен передавать пользовательский VPN-трафик.
+
+---
+
+# 13. Relay Server
+
+Relay Server используется, если невозможно установить прямое P2P-соединение.
+
+Relay должен:
+
+- принимать зашифрованный UDP-трафик;
+- определять destination peer;
+- пересылать пакет получателю.
+
+Relay не должен расшифровывать payload.
+
+Необходимо вести:
+
+- количество подключений;
+- traffic counters;
+- bandwidth usage;
+- latency;
+- packet loss.
+
+---
+
+# 14. Выбор маршрута
+
+Для каждого peer должна существовать таблица соединений.
+
+Пример:
+
+Peer A → P2P  
+Peer B → Relay EU-1  
+Peer C → P2P
+
+Клиент должен периодически проверять возможность перехода с Relay на P2P.
+
+При разрыве P2P клиент должен автоматически переключаться на Relay.
+
+---
+
+# 15. Network Discovery
+
+В рамках MVP гарантируется работа IP-трафика.
+
+Минимально необходимо поддерживать:
+
+- ICMP;
+- TCP;
+- UDP.
+
+Примеры:
+
+ping 10.100.15.3
+
+TCP connect:
+
+10.100.15.3:25565
+
+UDP LAN game traffic.
+
+Broadcast и multicast могут быть реализованы вторым этапом.
+
+Необходимо рассмотреть поддержку:
+
+- IPv4 broadcast;
+- multicast;
+- mDNS;
+- NetBIOS.
+
+Это важно для игр, которые автоматически ищут LAN-серверы.
+
+---
+
+# 16. Broadcast emulation
+
+Поскольку физической Ethernet LAN нет, broadcast-трафик необходимо эмулировать.
+
+Например:
+
+255.255.255.255
+
+или broadcast виртуальной подсети.
+
+При получении broadcast-пакета клиент либо сервер маршрутизации должен отправлять его всем peer данной сети.
+
+Для MVP допускается ограничение размера и частоты broadcast-трафика.
+
+---
+
+# 17. Пользовательский интерфейс
+
+Главное окно приложения должно содержать:
+
+## Верхняя панель
+
+- имя пользователя;
+- статус подключения;
+- настройки;
+- logout.
+
+## Список сетей
+
+Пример:
+
+Gaming Network  
+Office Network  
+Dev Network
+
+Для каждой сети:
+
+- online members;
+- network status;
+- owner.
+
+## Список устройств
+
+Пример:
+
+Gaming Network
+
+PC-A  
+10.100.1.2  
+Online  
+Ping: 24 ms  
+P2P
+
+PC-B  
+10.100.1.3  
+Online  
+Ping: 62 ms  
+Relay
+
+---
+
+# 18. Действия с участником сети
+
+Контекстное меню:
+
+- Copy Virtual IP;
+- Ping;
+- Remove from Network;
+- Block;
+- Show Connection Info.
+
+В будущем:
+
+- Remote Desktop;
+- File Transfer;
+- Port Check;
+- Wake-on-LAN.
+
+---
+
+# 19. Backend API
+
+Backend рекомендуется реализовать через REST или gRPC.
+
+Основные методы:
+
+POST /auth/register  
+POST /auth/login  
+POST /auth/refresh  
+
+GET /networks  
+POST /networks  
+GET /networks/{id}  
+DELETE /networks/{id}
+
+POST /networks/{id}/join  
+POST /networks/{id}/leave
+
+GET /networks/{id}/members  
+DELETE /networks/{id}/members/{peerId}
+
+POST /devices/register  
+GET /devices
+
+POST /invite  
+GET /invite/{token}
+
+---
+
+# 20. WebSocket / Realtime API
+
+Для realtime событий необходимо постоянное соединение с backend.
+
+Допустимо использовать:
+
+- WebSocket;
+- gRPC streaming;
+- QUIC.
+
+События:
+
+peer_online  
+peer_offline  
+peer_joined  
+peer_removed  
+network_updated  
+endpoint_updated  
+relay_assigned
+
+---
+
+# 21. Backend Database
+
+Рекомендуемая БД:
+
+PostgreSQL.
+
+Основные сущности:
+
+User  
+Device  
+Network  
+NetworkMember  
+Session  
+Invite  
+RelayNode  
+AuditLog
+
+---
+
+# 22. Redis
+
+Redis использовать для:
+
+- online presence;
+- session cache;
+- signaling;
+- pub/sub;
+- rate limit;
+- ephemeral peer data.
+
+---
+
+# 23. Admin Panel
+
+Администратор должен иметь возможность:
+
+- просматривать пользователей;
+- блокировать пользователя;
+- просматривать сети;
+- блокировать сеть;
+- просматривать активные устройства;
+- отслеживать relay usage;
+- видеть количество online peer;
+- просматривать нагрузку серверов;
+- просматривать технические события.
+
+Администратор не должен иметь доступ к содержимому VPN-трафика.
+
+---
+
+# 24. Логирование
+
+Логировать:
+
+- authentication;
+- network join/leave;
+- device registration;
+- signaling errors;
+- relay errors;
+- NAT traversal result;
+- client crash;
+- backend errors.
+
+Не логировать:
+
+- содержимое пользовательских IP-пакетов;
+- приватные ключи;
+- пароли;
+- чувствительные токены.
+
+---
+
+# 25. Метрики
+
+Основные метрики:
+
+Active Users  
+Online Devices  
+Active Networks  
+P2P Connections  
+Relay Connections  
+Total Traffic  
+Relay Traffic  
+Connection Success Rate  
+P2P Success Rate  
+Average Latency  
+Packet Loss  
+API Error Rate
+
+Рекомендуемый стек:
+
+Prometheus + Grafana.
+
+---
+
+# 26. Безопасность
+
+Необходимо предусмотреть:
+
+- TLS 1.3 для API;
+- E2E encryption трафика;
+- password hashing Argon2id;
+- JWT access tokens;
+- rotating refresh tokens;
+- device authentication;
+- rate limiting;
+- brute-force protection;
+- API request validation;
+- signed update packages;
+- secure key storage.
+
+На Windows private keys желательно хранить через:
+
+Windows DPAPI.
+
+---
+
+# 27. Защита от злоупотреблений
+
+Необходимо реализовать:
+
+- rate limits;
+- connection limits;
+- traffic limits;
+- abuse detection;
+- блокировку аккаунта;
+- блокировку устройства;
+- блокировку virtual network;
+- возможность ограничивать relay bandwidth.
+
+---
+
+# 28. Автообновление
+
+Desktop Client должен иметь встроенный updater.
+
+Необходимо поддерживать:
+
+- проверку новой версии;
+- скачивание обновления;
+- проверку цифровой подписи;
+- установку;
+- rollback при ошибке.
+
+Обновления должны быть подписаны цифровой подписью разработчика.
+
+---
+
+# 29. Технологический стек
+
+Один из рекомендуемых вариантов:
+
+## VPN Core
+
+Rust.
+
+Причины:
+
+- высокая производительность;
+- memory safety;
+- удобная работа с networking;
+- кроссплатформенность.
+
+Допустимы:
+
+- C++;
+- Go.
+
+## Desktop UI
+
+Варианты:
+
+- Tauri + React;
+- Qt;
+- .NET / WinUI 3.
+
+Для Windows-only MVP возможен:
+
+C# + WinUI 3.
+
+VPN Service при этом желательно реализовать на Rust.
+
+## Backend
+
+Рекомендуемые варианты:
+
+- Go;
+- Rust;
+- Node.js / TypeScript.
+
+Предпочтительно:
+
+Go.
+
+## Database
+
+PostgreSQL.
+
+## Cache / realtime
+
+Redis.
+
+## Infrastructure
+
+Docker  
+Kubernetes либо Docker Compose для MVP  
+Nginx / Envoy  
+Prometheus  
+Grafana
+
+---
+
+# 30. Предлагаемая структура компонентов
+
+Desktop Application
+
+↓
+
+VPN Service
+
+↓
+
+Virtual Adapter
+
+↓
+
+Routing Engine
+
+↓
+
+Encryption Engine
+
+↓
+
+P2P Transport
+
+↓
+
+Internet
+
+Параллельно:
+
+VPN Service  
+↓  
+Signaling Server  
+↓  
+Peer Discovery / NAT Traversal
+
+Если P2P невозможен:
+
+VPN Service  
+↓  
+Relay Node  
+↓  
+Remote Peer
+
+---
+
+# 31. MVP
+
+В первую версию должны войти:
+
+1. Windows Client.
+2. Регистрация и авторизация.
+3. Создание виртуальной сети.
+4. Подключение к сети.
+5. Виртуальный IPv4.
+6. Список участников.
+7. Virtual Network Adapter.
+8. TCP traffic.
+9. UDP traffic.
+10. ICMP.
+11. P2P UDP.
+12. UDP hole punching.
+13. Relay fallback.
+14. End-to-end encryption.
+15. Ping между участниками.
+16. Автоматическое переподключение.
+17. Basic Admin Panel.
+18. Logging.
+19. Monitoring.
+
+---
+
+# 32. Функции второй версии
+
+После MVP добавить:
+
+- LAN broadcast emulation;
+- multicast;
+- macOS;
+- Linux;
+- mobile clients;
+- IPv6;
+- MFA;
+- SSO;
+- public API;
+- organization accounts;
+- network ACL;
+- subnet routing;
+- exit nodes;
+- DNS;
+- remote desktop;
+- file transfer;
+- port forwarding.
+
+---
+
+# 33. Network ACL
+
+В дальнейшей версии должна быть возможность создавать правила.
+
+Пример:
+
+PC-A → PC-B → allow all
+
+PC-A → PC-C → TCP 22 only
+
+PC-B → PC-C → deny
+
+Правила должны применяться на VPN-клиенте.
+
+---
+
+# 34. Производительность
+
+Целевые показатели MVP:
+
+Время подключения клиента:
+
+до 5 секунд.
+
+Время подключения к сети:
+
+до 3 секунд.
+
+P2P connection establishment:
+
+до 5 секунд.
+
+Дополнительная latency от VPN:
+
+желательно менее 5–10 ms без учёта физического расстояния.
+
+Пропускная способность P2P:
+
+не менее 100 Mbps при наличии соответствующего интернет-канала.
+
+Relay:
+
+не менее 100 Mbps на соединение при достаточных серверных ресурсах.
+
+---
+
+# 35. Масштабирование
+
+Система должна поддерживать:
+
+Начальная цель:
+
+10 000 зарегистрированных пользователей.
+
+1 000 одновременно подключённых устройств.
+
+Архитектурно необходимо предусмотреть возможность масштабирования минимум до:
+
+100 000+ пользователей;
+
+20 000+ одновременных устройств.
+
+Signaling backend должен масштабироваться горизонтально.
+
+Relay nodes должны добавляться независимо.
+
+---
+
+# 36. География Relay
+
+Relay Nodes желательно размещать минимум в:
+
+- Europe;
+- North America;
+- Asia.
+
+Клиент должен выбирать relay с минимальной latency.
+
+Для MVP достаточно одного региона.
+
+---
+
+# 37. Устойчивость к сбоям
+
+Клиент должен автоматически восстанавливать:
+
+- соединение с signaling;
+- P2P-сессии;
+- relay connection;
+- membership state.
+
+После временного отключения интернета пользователь не должен вручную переподключаться к сети.
+
+---
+
+# 38. Ограничения MVP
+
+На первом этапе допускается:
+
+- только IPv4;
+- только Windows;
+- до 50 устройств на сеть;
+- один активный клиент на устройство;
+- один relay region;
+- отсутствие собственного DNS;
+- отсутствие subnet routing;
+- отсутствие mobile client.
+
+---
+
+# 39. Тестирование
+
+Необходимо реализовать:
+
+## Unit Tests
+
+Для:
+
+- encryption;
+- routing;
+- protocol parser;
+- authentication;
+- network allocation.
+
+## Integration Tests
+
+Проверять:
+
+PC-A ↔ PC-B P2P.
+
+PC-A ↔ PC-B через relay.
+
+Потеря P2P → автоматический переход на relay.
+
+Потеря relay → reconnect.
+
+## NAT Tests
+
+Тестировать:
+
+- обычный домашний NAT;
+- double NAT;
+- CGNAT;
+- symmetric NAT;
+- firewall restrictions.
+
+---
+
+# 40. Acceptance Criteria MVP
+
+MVP считается готовым, если:
+
+1. Два Windows-компьютера в разных физических сетях устанавливают клиент.
+2. Первый пользователь создаёт виртуальную сеть.
+3. Второй пользователь подключается к ней.
+4. Оба устройства получают виртуальный IPv4.
+5. Устройства пингуют друг друга.
+6. Между ними устанавливается TCP-соединение.
+7. Между ними проходит UDP-трафик.
+8. При возможности используется P2P.
+9. При невозможности P2P автоматически используется relay.
+10. Трафик зашифрован.
+11. После перезапуска клиента сеть восстанавливается автоматически.
+12. В UI отображаются online status, virtual IP, ping и connection type.
+
+---
+
+# 41. Рекомендуемая команда разработки
+
+Для полноценного MVP:
+
+1 Backend Engineer  
+1 Network / Systems Engineer  
+1 Desktop Engineer  
+1 Frontend / UI Engineer  
+1 DevOps Engineer  
+1 QA Engineer
+
+При небольшой команде часть ролей можно объединить.
+
+Ключевой специалист проекта — Network/System Engineer с опытом:
+
+- UDP;
+- NAT traversal;
+- VPN;
+- virtual network adapters;
+- routing;
+- cryptography;
+- Windows networking.
+
+---
+
+# 42. Приоритет разработки
+
+Этап 1:
+
+Virtual Adapter + передача IP-пакетов между двумя компьютерами.
+
+Этап 2:
+
+Encryption.
+
+Этап 3:
+
+Signaling server.
+
+Этап 4:
+
+P2P connection establishment.
+
+Этап 5:
+
+NAT traversal.
+
+Этап 6:
+
+Relay fallback.
+
+Этап 7:
+
+Network/account backend.
+
+Этап 8:
+
+Desktop UI.
+
+Этап 9:
+
+Monitoring и Admin Panel.
+
+Этап 10:
+
+Оптимизация, тестирование и production deployment.
+
+---
+
+# 43. Основная архитектурная цель
+
+Продукт не должен работать как классический VPN, где весь интернет-трафик пользователя направляется через центральный VPN-сервер.
+
+Система должна создавать overlay network между устройствами.
+
+Основной путь трафика:
+
+Device A ↔ Device B
+
+Центральная инфраструктура используется для:
+
+- authentication;
+- signaling;
+- peer discovery;
+- NAT traversal;
+- relay fallback.
+
+Это снижает стоимость инфраструктуры, уменьшает задержку и позволяет масштабировать продукт значительно эффективнее.
