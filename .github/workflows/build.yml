@@ -87,9 +87,47 @@ jobs:
           path: artifacts/
           if-no-files-found: error
 
+  windows-smoke:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LinkLAN-v${{ needs.build.outputs.version }}
+          path: artifacts
+      - name: Verify installer, uninstall command and installed client
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $installer = Join-Path $PWD "artifacts/LinkLAN-Setup-x64-v$env:VERSION.exe"
+          $process = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru
+          if (-not $process.WaitForExit(60000) -or $process.ExitCode -ne 0) {
+            throw 'Silent installation failed'
+          }
+          $installDir = Join-Path $env:ProgramFiles 'LinkLAN'
+          $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN'
+          $expected = '"' + (Join-Path $installDir 'Uninstall.exe') + '"'
+          if ($entry.UninstallString -ne $expected -or $entry.DisplayVersion -ne $env:VERSION) {
+            throw 'Installer registry entries do not match the installed release'
+          }
+          $client = Join-Path $installDir 'LinkLAN.exe'
+          $process = Start-Process -FilePath $client -ArgumentList '--self-test' -PassThru
+          if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 0) {
+            throw 'Installed client self-test failed'
+          }
+          $versionOutput = Join-Path $env:RUNNER_TEMP 'linklan-version.txt'
+          $process = Start-Process -FilePath $client -ArgumentList '--version' -RedirectStandardOutput $versionOutput -PassThru
+          if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 0) {
+            throw 'Installed client version command failed'
+          }
+          if ((Get-Content $versionOutput -Raw).Trim() -ne $env:VERSION) {
+            throw 'Installed EXE version does not match release-version'
+          }
+
   release:
     if: github.ref_type == 'tag'
-    needs: build
+    needs: [build, windows-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write

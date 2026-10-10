@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LinkLAN · Запуск и подключение</title><link rel="stylesheet" href="/style.css"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23152720'/%3E%3Ctext x='8' y='24' fill='%23d6f780' font-size='24'%3EL%3C/text%3E%3C/svg%3E"></head>
 <body><header class="header wrap"><a class="brand" href="/"><span class="mark">L↗</span>LinkLAN</a><a href="/#download">Скачать ↗</a></header>
-<main class="guide wrap"><span class="eyebrow">ДОКУМЕНТАЦИЯ / 0.2.3</span><h1>Ваш сервер.<br>Ваша сеть.</h1>
+<main class="guide wrap"><span class="eyebrow">ДОКУМЕНТАЦИЯ / 0.2.4</span><h1>Ваш сервер.<br>Ваша сеть.</h1>
 <p>Проект содержит API, UDP relay, STUN, Windows-клиент, лендинг и мониторинг. Нужны Docker Engine и Compose v2 с Linux-контейнерами. Сборка клиента в Linux Docker создаёт Windows x64 .exe. Go-зависимости уже включены в vendor: компиляция не скачивает модули. Интернет нужен для Docker-образов, системных пакетов и Wintun.</p>
 <h2>1. Подготовьте сервер</h2><p>Для новой установки распакуйте исходники и выполните в каталоге проекта:</p><pre><code>python3 scripts/init-env.py
 # Отредактируйте .env:
@@ -11,18 +11,18 @@
 python3 scripts/publish-downloads.py
 docker compose up -d --build</code></pre>
 <p>Локальная страница: <a href="http://localhost:8191">http://localhost:8191</a>. API: /api, администрирование: /admin. Для HTTPS на 8191 положите сертификаты в deploy/certs и включите TLS:</p><pre><code>docker compose -f compose.yml -f compose.tls.yml up -d --build</code></pre>
-<p>Если 443 уже обслуживает ваш Caddy, подключите контейнер web к его Docker-сети с alias <code>linklan-web</code> и направьте ваш домен на <code>linklan-web:80</code>. В клиенте достаточно домена, а внешний порт LinkLAN остаётся <strong>8191</strong>. Пример для существующего стека — в docs/UPGRADE-0.2.3.md.</p>
+<p>Если 443 уже обслуживает ваш Caddy, подключите контейнер web к его Docker-сети с alias <code>linklan-web</code> и направьте ваш домен на <code>linklan-web:80</code>. В клиенте достаточно домена, а внешний порт LinkLAN остаётся <strong>8191</strong>. Пример для существующего стека — в docs/UPGRADE-0.2.4.md.</p>
 <table><tr><th>Порт</th><th>Назначение</th></tr><tr><td>8191 / TCP</td><td>Лендинг, скачивание, API, WebSocket</td></tr><tr><td>3478 / UDP</td><td>STUN</td></tr><tr><td>51820 / UDP</td><td>Зашифрованный relay</td></tr></table>
 <p>Если 3478/UDP занят другим сервисом, задайте в .env <code>STUN_HOST_PORT=13478</code> и <code>STUN_PUBLIC_ADDRESS=ваш-домен:13478</code>. Внутренний порт остаётся 3478. Для внешнего Caddy используйте ваш compose.caddy.yml, для TLS внутри LinkLAN — compose.tls.yml. Выбранные внешние UDP-порты должны быть доступны клиентам.</p>
 <h2>2. Подключите компьютеры</h2><ol><li>Распакуйте ZIP клиента целиком: LinkLAN.exe и wintun.dll должны лежать рядом.</li><li>Запустите клиент от администратора. В запросе брандмауэра нажмите «Да»: разрешение сохраняется. Введите только домен, например <code>linklan.lknet.ru</code>, и нажмите «Подключиться». Для HTTPS на другом порту укажите домен:порт.</li><li>Первый участник нажимает «Создать сеть», задаёт имя и пароль сети.</li><li>Остальные нажимают «Присоединиться» и вводят то же имя и пароль или код приглашения. Регистрации и входа в аккаунт нет.</li><li>VPN включается автоматически. Раскройте сеть, выберите компьютер и нажмите «Ping» или «Копировать IP». Для переключения сети используйте двойной щелчок; ON/OFF отключает или включает VPN.</li></ol>
 <p>Окно клиента уменьшено до 360 × 480 при масштабе 100%. Свой ПК и его IP находятся в верхней панели. Палочки слева от других участников обновляются по настоящему ICMP: четыре — до 50 мс, три — до 150 мс, две — до 300 мс, одна — выше; красная — ответа нет, серые — ещё не проверено или сеть выключена. В меню «Система» меняются имя ПК, домен, тема и автоподключение, а также можно повторить запрос брандмауэра. После согласия разрешаются все протоколы на своём виртуальном адаптере и в своей подсети. Broadcast-поиск пока не поддерживается.</p>
-<h2>3. Обновите клиент и загрузки</h2><p>Клиент 0.2.3 совместим с вашим API 0.2.0: обновлять API и relay для этого выпуска не обязательно. Закройте LinkLAN, замените все файлы новым ZIP и сохраните <code>%APPDATA%\LinkLAN\profile.dpapi</code>. Запускайте от того же Windows-пользователя. При первом запуске новой версии разрешите настройку брандмауэра.</p>
+<h2>3. Обновите клиент и загрузки</h2><p>Клиент 0.2.4 совместим с вашим API 0.2.0: обновлять API и relay для этого выпуска не обязательно. Закройте LinkLAN, замените все файлы новым ZIP и сохраните <code>%APPDATA%\LinkLAN\profile.dpapi</code>. Запускайте от того же Windows-пользователя. При первом запуске новой версии разрешите настройку брандмауэра.</p>
 <p>Чтобы новый клиент скачивался с linklan.lknet.ru, поместите архив обновления в /root/LinkLAN и выполните. Ваш .env, compose.caddy.yml и тома базы сохраняются:</p><pre><code>cd /root/LinkLAN
-unzip -o LinkLAN-update-v0.2.3.zip -d .
-cp LinkLAN-update-v0.2.3.zip web/downloads/
+unzip -o LinkLAN-update-v0.2.4.zip -d .
+cp LinkLAN-update-v0.2.4.zip web/downloads/
 docker compose -f compose.yml -f compose.caddy.yml up -d web</code></pre>
-<p>Архив содержит все vendored Go-зависимости. Если хотите также пересобрать API из исходников 0.2.3, выполните <code>docker compose -f compose.yml -f compose.caddy.yml up -d --build api web</code>. После пересборки health покажет 0.2.3; при обновлении только лендинга версия API остаётся 0.2.0. Caddy продолжает обслуживать 443, веб — 8191.</p>
-<p><a class="button primary" href="/downloads/LinkLAN-update-v0.2.3.zip" download>Скачать обновление лендинга и загрузок ↓</a></p>
+<p>Архив содержит все vendored Go-зависимости. Если хотите также пересобрать API из исходников 0.2.4, выполните <code>docker compose -f compose.yml -f compose.caddy.yml up -d --build api web</code>. После пересборки health покажет 0.2.4; при обновлении только лендинга версия API остаётся 0.2.0. Caddy продолжает обслуживать 443, веб — 8191.</p>
+<p><a class="button primary" href="/downloads/LinkLAN-update-v0.2.4.zip" download>Скачать обновление лендинга и загрузок ↓</a></p>
 <h2>4. Соберите клиент в Docker</h2><pre><code>docker build -f Dockerfile.client --target artifacts \
   --output type=local,dest=./releases .
 python3 scripts/publish-downloads.py
@@ -31,5 +31,5 @@ docker compose restart web</code></pre>
 <h2>5. Панель администратора</h2><p>Обычным пользователям аккаунт не нужен. Для /admin сохраняется отдельный email/password вход. Используйте существующий аккаунт или создайте его через <code>POST /api/auth/register</code> с полями email, name, password (12–256 байт), затем назначьте права:</p><pre><code>docker compose exec api /app/linklan-server \
   --make-admin admin@example.com</code></pre>
 <p>Откройте /admin и войдите в этот аккаунт. При использовании Caddy добавляйте к compose-командам <code>-f compose.yml -f compose.caddy.yml</code> перед exec.</p>
-<h2>Статус версии 0.2.3</h2><p>Это тестовый MVP. Одновременно активна одна сеть. Испытания на реальных Windows, разных NAT и целевых нагрузках ещё необходимы. Отдельная Windows-служба, LAN-обнаружение и macOS/Linux — дальнейшее развитие.</p><p><a class="button primary" href="/downloads/LinkLAN-source-v0.2.3.zip" download>Скачать исходный проект ↓</a></p>
+<h2>Статус версии 0.2.4</h2><p>Это тестовый MVP. Одновременно активна одна сеть. Испытания на реальных Windows, разных NAT и целевых нагрузках ещё необходимы. Отдельная Windows-служба, LAN-обнаружение и macOS/Linux — дальнейшее развитие.</p><p><a class="button primary" href="/downloads/LinkLAN-source-v0.2.4.zip" download>Скачать исходный проект ↓</a></p>
 </main><footer class="footer wrap"><a href="/">← Вернуться на лендинг</a><a href="/downloads/SHA256SUMS.txt">Контрольные суммы</a></footer></body></html>

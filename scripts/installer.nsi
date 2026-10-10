@@ -3,7 +3,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef VERSION
-!define VERSION "0.2.3"
+!define VERSION "0.2.4"
 !endif
 Name "LinkLAN"
 OutFile "${OUTPUT}"
@@ -35,7 +35,7 @@ Section "LinkLAN"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN" "DisplayName" "LinkLAN"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN" "UninstallString" '$"$INSTDIR\Uninstall.exe$"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN" "UninstallString" '"$INSTDIR\Uninstall.exe"'
 SectionEnd
 Section "Uninstall"
   Delete "$DESKTOP\LinkLAN.lnk"
