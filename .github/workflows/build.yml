@@ -106,7 +106,8 @@ jobs:
             throw 'Silent installation failed'
           }
           $installDir = Join-Path $env:ProgramFiles 'LinkLAN'
-          $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN'
+          # NSIS is a 32-bit installer; its uninstall entry uses the 32-bit registry view.
+          $entry = Get-ItemProperty 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\LinkLAN'
           $expected = '"' + (Join-Path $installDir 'Uninstall.exe') + '"'
           if ($entry.UninstallString -ne $expected -or $entry.DisplayVersion -ne $env:VERSION) {
             throw 'Installer registry entries do not match the installed release'
