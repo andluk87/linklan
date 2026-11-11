@@ -427,7 +427,7 @@ func runClient(store *tunnel.Store, uiPreview bool) error {
 	u.add(u.window, u.controls, 1006, "BUTTON", "Не в сети", 82, 64, 250, 18, 0xb)
 	u.add(u.window, u.controls, 200, "BUTTON", "+ Создать сеть", 10, 96, 155, 28, 0xb)
 	u.add(u.window, u.controls, 201, "BUTTON", "Присоединиться", 173, 96, 155, 28, 0xb)
-	u.add(u.window, u.controls, 3000, "SysTreeView32", "", 10, 136, 318, 200, 0x00201020)
+	u.add(u.window, u.controls, 3000, "SysTreeView32", "", 10, 136, 318, 200, 0x00209020)
 	u.add(u.window, u.controls, 1009, "STATIC", "Создайте сеть или присоединитесь к существующей.", 24, 154, 290, 52, 0)
 	u.add(u.window, u.controls, 300, "BUTTON", "Копировать IP", 10, 350, 112, 26, 0xb)
 	u.add(u.window, u.controls, 301, "BUTTON", "Ping", 130, 350, 58, 26, 0xb)
