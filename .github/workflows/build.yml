@@ -66,7 +66,16 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('version=' + version + '\n')
           PY
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nsis
+      - name: Prepare NSIS
+        timeout-minutes: 5
+        run: |
+          if ! command -v makensis >/dev/null; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends nsis || {
+              sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+              sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends nsis
+            }
+          fi
+          makensis -VERSION
       - run: python3 scripts/build-client.py --installer
       - run: python3 scripts/publish-downloads.py && python3 scripts/package-update.py
       - name: Collect downloadable artifacts
