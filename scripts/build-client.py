@@ -24,7 +24,7 @@ def release_version():
     return version
 
 
-def build(output, wintun_archive=None, installer=False):
+def build(output, wintun_archive=None, installer=False, installer_image=None):
     version = release_version()
     subprocess.run([sys.executable, str(ROOT / "scripts/build-resource.py")], cwd=ROOT, check=True)
     output = Path(output).resolve()
@@ -55,10 +55,20 @@ def build(output, wintun_archive=None, installer=False):
         subprocess.run(['go', 'run', '-mod=vendor', '-buildvcs=false', './cmd/release',
                         '-bundle', str(bundle), '-output', str(output), '-version', version],
                        cwd=ROOT, env=dict(env, GOOS='', GOARCH=''), check=True)
-        if installer:
-            subprocess.run(['makensis', f'-DVERSION={version}', f'-DBUNDLE={bundle}',
-                            f'-DOUTPUT={output / ("LinkLAN-Setup-x64-v" + version + ".exe")}',
-                            str(ROOT / 'scripts/installer.nsi')], cwd=ROOT, check=True)
+        if installer or installer_image:
+            command = ['makensis', f'-DVERSION={version}', f'-DBUNDLE={bundle}',
+                       f'-DOUTPUT={output / ("LinkLAN-Setup-x64-v" + version + ".exe")}',
+                       str(ROOT / 'scripts/installer.nsi')]
+            if installer_image:
+                if not hasattr(os, 'getuid'):
+                    raise ValueError('--installer-image requires a Linux Docker host')
+                command = ['docker', 'run', '--rm', '--network', 'none',
+                           '--user', f'{os.getuid()}:{os.getgid()}',
+                           '--mount', f'type=bind,src={ROOT},dst={ROOT},readonly',
+                           '--mount', f'type=bind,src={bundle},dst={bundle},readonly',
+                           '--mount', f'type=bind,src={output},dst={output}',
+                           '--workdir', str(ROOT), installer_image] + command
+            subprocess.run(command, cwd=ROOT, check=True)
     checks = []
     for path in sorted(output.iterdir()):
         if path.name in (f'LinkLAN-Windows-x64-v{version}.zip', f'LinkLAN-Setup-x64-v{version}.exe'):
@@ -72,5 +82,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=ROOT / 'releases')
     parser.add_argument('--wintun-archive', type=Path, help='Cached official ZIP (checksum still verified)')
     parser.add_argument('--installer', action='store_true', help='Also build the NSIS installer')
+    parser.add_argument('--installer-image', help='Build the installer with NSIS in this Linux Docker image')
     args = parser.parse_args()
-    build(args.output, args.wintun_archive, args.installer)
+    build(args.output, args.wintun_archive, args.installer, args.installer_image)

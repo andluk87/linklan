@@ -48,3 +48,14 @@ NSIS требуется только для `--installer`. Dockerfile.client т�
 сохраняется отдельно; обновление клиента не меняет её.
 
 ![Автономный предпросмотр интерфейса LinkLAN](screenshots/interface-0.3.0.png)
+
+В GitHub Actions NSIS запускается в отдельном Debian-контейнере, без установки
+пакетов в Ubuntu-runner. Тот же вариант доступен локально на Linux:
+
+```bash
+docker build -f scripts/Dockerfile.nsis -t linklan-nsis .
+python3 scripts/build-client.py --installer-image linklan-nsis
+```
+
+Контейнер упаковки запускается без сети и от UID/GID текущего пользователя.
+Исходники и временный portable bundle доступны ему только для чтения.
