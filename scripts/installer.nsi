@@ -3,8 +3,10 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef VERSION
-!define VERSION "0.2.5"
+!define VERSION "0.3.0"
 !endif
+!define MUI_ICON "${__FILEDIR__}/../assets/linklan.ico"
+!define MUI_UNICON "${__FILEDIR__}/../assets/linklan.ico"
 Name "LinkLAN"
 OutFile "${OUTPUT}"
 InstallDir "$PROGRAMFILES64\LinkLAN"

@@ -125,6 +125,32 @@ jobs:
           if ((Get-Content $versionOutput -Raw).Trim() -ne $env:VERSION) {
             throw 'Installed EXE version does not match release-version'
           }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($client)
+          if ($info.ProductName -ne 'LinkLAN' -or $info.ProductVersion -ne $env:VERSION) {
+            throw 'Windows file properties do not match the release'
+          }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($client)
+          if ($null -eq $icon) { throw 'Explorer application icon is missing' }
+          $icon.Dispose()
+          $preview = Start-Process -FilePath $client -ArgumentList '--ui-preview' -PassThru
+          try {
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Milliseconds 500
+              $preview.Refresh()
+              if ($preview.HasExited) { throw 'UI preview exited before opening a window' }
+              if ($preview.MainWindowHandle -ne 0) { break }
+            }
+            if ($preview.MainWindowHandle -eq 0 -or $preview.MainWindowTitle -ne 'LinkLAN') {
+              throw 'UI preview did not open the LinkLAN window'
+            }
+            $null = $preview.CloseMainWindow()
+            if (-not $preview.WaitForExit(10000) -or $preview.ExitCode -ne 0) {
+              throw 'UI preview did not close cleanly'
+            }
+          } finally {
+            if (-not $preview.HasExited) { Stop-Process -Id $preview.Id }
+          }
 
   release:
     if: github.ref_type == 'tag'

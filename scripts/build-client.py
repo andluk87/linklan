@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a versioned Windows bundle with verified official Wintun artifacts."""
 import argparse
+import sys
 import hashlib
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ def release_version():
 
 def build(output, wintun_archive=None, installer=False):
     version = release_version()
+    subprocess.run([sys.executable, str(ROOT / "scripts/build-resource.py")], cwd=ROOT, check=True)
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, CGO_ENABLED='0', GOTOOLCHAIN='local', GOTELEMETRY='off')

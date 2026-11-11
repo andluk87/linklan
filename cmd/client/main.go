@@ -19,6 +19,7 @@ import (
 )
 
 func main() {
+	preview := flag.Bool("ui-preview", false, "Preview the interface offline without administrator access or VPN")
 	selfTest := flag.Bool("self-test", false, "Run local binary self-test")
 	version := flag.Bool("version", false, "Show version")
 	allowHTTP := flag.Bool("allow-http", false, "Allow insecure HTTP for isolated development networks")
@@ -31,11 +32,23 @@ func main() {
 		return
 	}
 	if *selfTest {
+		if e := desktop.CheckIcon(); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			os.Exit(1)
+		}
 		block, e := aes.NewCipher(make([]byte, 32))
 		if e != nil {
 			os.Exit(1)
 		}
 		if _, e = cipher.NewGCM(block); e != nil {
+			os.Exit(1)
+		}
+		return
+	}
+	if *preview {
+		store := &tunnel.Store{Data: tunnel.Config{Theme: "dark", DeviceName: "and-home"}}
+		if e := desktop.Preview(store); e != nil {
+			fmt.Fprintln(os.Stderr, e)
 			os.Exit(1)
 		}
 		return

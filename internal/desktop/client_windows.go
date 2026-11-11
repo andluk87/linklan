@@ -80,6 +80,11 @@ type clientDialog struct {
 }
 type ui struct {
 	window, instance, font, boldFont, smallFont uintptr
+	networkFont                                 uintptr
+	icon, smallIcon                             uintptr
+	menus                                       map[uintptr]uintptr
+	menuLabels                                  map[int]string
+	preview                                     bool
 	dpi                                         int
 	controls                                    map[int]uintptr
 	queue                                       chan func()
@@ -127,7 +132,7 @@ func (u *ui) setTheme(theme string) {
 	if theme == "light" {
 		u.palette = palette{rgb(245, 247, 250), rgb(231, 237, 246), rgb(226, 233, 241), rgb(30, 43, 60), rgb(110, 127, 146), rgb(40, 112, 216), rgb(25, 153, 98)}
 	} else {
-		u.palette = palette{rgb(15, 20, 29), rgb(24, 33, 46), rgb(35, 46, 62), rgb(234, 240, 249), rgb(133, 151, 175), rgb(91, 165, 255), rgb(70, 207, 151)}
+		u.palette = palette{rgb(14, 22, 32), rgb(35, 45, 59), rgb(42, 61, 79), rgb(241, 246, 250), rgb(146, 163, 180), rgb(38, 187, 214), rgb(85, 219, 55)}
 	}
 	u.backgroundBrush = brush(u.palette.Background)
 	u.panelBrush = brush(u.palette.Panel)
@@ -154,13 +159,19 @@ func (u *ui) colorControl(msg uint32, dc, control uintptr) uintptr {
 		background, b = p.Field, u.fieldBrush
 	}
 	id := int(call("GetDlgCtrlID", control))
+	if u.dialog != nil && u.dialog.Kind == "properties" && call("GetParent", control) == u.dialog.Window {
+		background, b = p.Panel, u.panelBrush
+		if id == 12 || id == 112 || id == 191 {
+			color = p.Accent
+		}
+	}
 	if id == 1004 || id == 1005 || id == 1006 {
 		background, b = p.Panel, u.panelBrush
 	}
-	if id == 1005 {
+	if id == 1004 {
 		color = p.Accent
 	}
-	if id == 999 || id == 1006 || id == 1009 || id == 1010 {
+	if id == 999 || id == 1009 || id == 1010 {
 		color = p.Muted
 	}
 	gdi.NewProc("SetTextColor").Call(dc, uintptr(color))
@@ -172,11 +183,26 @@ func (u *ui) paintBackground(h, dc uintptr) {
 	call("GetClientRect", h, uintptr(unsafe.Pointer(&r)))
 	call("FillRect", dc, uintptr(unsafe.Pointer(&r)), u.backgroundBrush)
 	if h == u.window {
-		card := rect{int32(u.s(10)), int32(u.s(8)), r.Right - int32(u.s(10)), int32(u.s(86))}
-		u.rounded(dc, card, u.panelBrush)
+		u.paintChrome(dc, r)
+	} else if u.dialog != nil && u.dialog.Kind == "properties" {
+		for _, v := range [][2]int{{8, 108}, {112, 188}, {192, 282}} {
+			u.rounded(dc, rect{int32(u.s(12)), int32(u.s(v[0])), r.Right - int32(u.s(12)), int32(u.s(v[1]))}, u.panelBrush)
+		}
 	}
 }
 func (u *ui) drawButton(d *drawItem) {
+	if d.ID >= 500 && d.ID <= 511 {
+		b := u.backgroundBrush
+		if d.ID >= 510 {
+			b = u.panelBrush
+		}
+		if d.State&1 != 0 {
+			b = u.fieldBrush
+		}
+		call("FillRect", d.DC, uintptr(unsafe.Pointer(&d.Rect)), b)
+		u.label(d.DC, text(d.Window), d.Rect, u.font, u.palette.Text, 1|4)
+		return
+	}
 	p := u.palette
 	b := u.fieldBrush
 	if d.ID == 100 || d.ID == 200 || d.ID == 201 || d.ID == 1 {
@@ -197,22 +223,14 @@ func (u *ui) drawButton(d *drawItem) {
 	gdi.NewProc("SetBkMode").Call(d.DC, 1)
 	gdi.NewProc("SetTextColor").Call(d.DC, uintptr(color))
 	old, _, _ := gdi.NewProc("SelectObject").Call(d.DC, u.font)
-	if d.ID == 100 {
-		c := p.Muted
-		title := "OFF"
-		if u.wanted {
-			c = p.Accent
-			title = "ON"
-		}
-		pen, _, _ := gdi.NewProc("CreatePen").Call(0, uintptr(u.s(2)), uintptr(c))
-		oldPen, _, _ := gdi.NewProc("SelectObject").Call(d.DC, pen)
-		oldBrush, _, _ := gdi.NewProc("SelectObject").Call(d.DC, u.panelBrush)
-		gdi.NewProc("Ellipse").Call(d.DC, uintptr(d.Rect.Left+2), uintptr(d.Rect.Top+2), uintptr(d.Rect.Right-2), uintptr(d.Rect.Bottom-2))
-		gdi.NewProc("SetTextColor").Call(d.DC, uintptr(c))
-		call("DrawTextW", d.DC, uintptr(unsafe.Pointer(wide(title))), ^uintptr(0), uintptr(unsafe.Pointer(&d.Rect)), 0x25)
-		gdi.NewProc("SelectObject").Call(d.DC, oldPen)
-		gdi.NewProc("SelectObject").Call(d.DC, oldBrush)
-		gdi.NewProc("DeleteObject").Call(pen)
+	if d.ID == 1006 {
+		badge := brush(rgb(44, 142, 161))
+		u.rounded(d.DC, d.Rect, badge)
+		gdi.NewProc("DeleteObject").Call(badge)
+		u.label(d.DC, text(d.Window), d.Rect, u.smallFont, rgb(255, 255, 255), 1|4)
+	} else if d.ID == 100 {
+		u.drawPower(d)
+
 	} else {
 		call("DrawTextW", d.DC, uintptr(unsafe.Pointer(wide(text(d.Window)))), ^uintptr(0), uintptr(unsafe.Pointer(&d.Rect)), 0x25)
 	}
@@ -228,39 +246,43 @@ func (u *ui) add(parent uintptr, controls map[int]uintptr, id int, kind, title s
 	return handle
 }
 func (u *ui) menu() {
-	bar := call("CreateMenu")
-	add := func(menu uintptr, id int, title string) {
-		call("AppendMenuW", menu, 0, uintptr(id), uintptr(unsafe.Pointer(wide(title))))
+	u.menus = map[uintptr]uintptr{}
+	u.menuLabels = map[int]string{}
+	sys := u.newMenu()
+	u.menuItem(sys, 107, "Изменить имя компьютера…")
+	u.menuItem(sys, 101, "Сервер и настройки…")
+	u.menuItem(sys, 102, "Исключения брандмауэра…")
+	u.menuSeparator(sys)
+	u.menuItem(sys, 106, "Выход")
+	network := u.newMenu()
+	u.menuItem(network, 200, "Создать сеть…")
+	u.menuItem(network, 201, "Присоединиться к сети…")
+	u.menuSeparator(network)
+	u.menuItem(network, 204, "Подключить выбранную сеть")
+	u.menuItem(network, 205, "Отключить VPN")
+	u.menuItem(network, 208, "Обновить список")
+	u.menuItem(network, 202, "Создать приглашение")
+	u.menuItem(network, 203, "Покинуть сеть")
+	u.menuItem(network, 206, "Удалить сеть")
+	help := u.newMenu()
+	u.menuItem(help, 400, "Как подключить компьютеры")
+	u.menuItem(help, 401, "Просмотреть журнал")
+	u.menuItem(help, 105, "Проверить обновления")
+	u.menuItem(help, 402, "О программе")
+	for i, item := range []struct {
+		title string
+		menu  uintptr
+	}{{"Система", sys}, {"Сеть", network}, {"Справка", help}} {
+		h := u.add(u.window, u.controls, 500+i, "BUTTON", item.title, 0, 0, 0, 0, 0xb)
+		u.menus[h] = item.menu
 	}
-	popup := func(title string) uintptr {
-		h := call("CreatePopupMenu")
-		call("AppendMenuW", bar, 0x10, h, uintptr(unsafe.Pointer(wide(title))))
-		return h
-	}
-	sys := popup("Система")
-	add(sys, 101, "Сервер и настройки…")
-	add(sys, 101, "Изменить имя компьютера…")
-	add(sys, 102, "Доступ через брандмауэр…")
-	call("AppendMenuW", sys, 0x800, 0, 0)
-	add(sys, 106, "Выход")
-	network := popup("Сеть")
-	add(network, 200, "Создать сеть…")
-	add(network, 201, "Присоединиться к сети…")
-	call("AppendMenuW", network, 0x800, 0, 0)
-	add(network, 204, "Подключить выбранную сеть")
-	add(network, 205, "Отключить VPN")
-	add(network, 208, "Обновить список")
-	add(network, 202, "Создать приглашение")
-	add(network, 203, "Покинуть сеть")
-	add(network, 206, "Удалить сеть")
-	help := popup("Справка")
-	add(help, 400, "Как подключить компьютеры")
-	add(help, 401, "Просмотреть журнал")
-	add(help, 105, "Проверить обновления")
-	add(help, 402, "О программе")
-	call("SetMenu", u.window, bar)
 }
-func Run(store *tunnel.Store) error {
+func Run(store *tunnel.Store) error { return runClient(store, false) }
+
+// Preview is an offline UI fixture; it never contacts a server or starts Wintun.
+func Preview(store *tunnel.Store) error { return runClient(store, true) }
+
+func runClient(store *tunnel.Store, uiPreview bool) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -285,8 +307,10 @@ func Run(store *tunnel.Store) error {
 	}
 	u.font = makeFont(13, 400)
 	u.boldFont = makeFont(16, 600)
+	u.networkFont = makeFont(13, 600)
 	u.smallFont = makeFont(12, 400)
-	mainClass := windowClass{Instance: u.instance, Cursor: call("LoadCursorW", 0, 32512), Name: wide("LinkLANClientV2")}
+	u.loadIcons()
+	mainClass := windowClass{Instance: u.instance, Cursor: call("LoadCursorW", 0, 32512), Name: wide("LinkLANClientV2"), Icon: u.icon, SmallIcon: u.smallIcon}
 	mainClass.Size = uint32(unsafe.Sizeof(mainClass))
 	mainClass.Proc = windows.NewCallback(func(h uintptr, msg uint32, w, l uintptr) uintptr {
 		switch msg {
@@ -310,9 +334,17 @@ func Run(store *tunnel.Store) error {
 		case 5:
 			u.layout()
 			return 0
+		case 0x84:
+			return u.hitTest(h, l)
+		case 0x2c:
+			return u.measureMenu(l)
+		case 0x100:
+			if u.mainKey(w) {
+				return 0
+			}
 		case 0x24:
 			mm := (*minmax)(unsafe.Pointer(l))
-			mm.MinTrack = point{int32(u.s(320)), int32(u.s(360))}
+			mm.MinTrack = point{int32(u.s(340)), int32(u.s(380))}
 			return 0
 		case 0x14:
 			u.paintBackground(h, w)
@@ -320,7 +352,11 @@ func Run(store *tunnel.Store) error {
 		case 0x133, 0x135, 0x138:
 			return u.colorControl(msg, w, l)
 		case 0x2b:
-			u.drawButton((*drawItem)(unsafe.Pointer(l)))
+			if (*drawItem)(unsafe.Pointer(l)).Type == 1 {
+				u.drawMenu((*drawItem)(unsafe.Pointer(l)))
+			} else {
+				u.drawButton((*drawItem)(unsafe.Pointer(l)))
+			}
 			return 1
 		case 0x111:
 			if w>>16 == 0 {
@@ -343,7 +379,7 @@ func Run(store *tunnel.Store) error {
 	if call("RegisterClassExW", uintptr(unsafe.Pointer(&mainClass))) == 0 {
 		return fmt.Errorf("Не удалось создать окно LinkLAN")
 	}
-	dialogClass := windowClass{Instance: u.instance, Cursor: mainClass.Cursor, Name: wide("LinkLANDialogV2")}
+	dialogClass := windowClass{Instance: u.instance, Cursor: mainClass.Cursor, Name: wide("LinkLANDialogV2"), Icon: u.icon, SmallIcon: u.smallIcon}
 	dialogClass.Size = uint32(unsafe.Sizeof(dialogClass))
 	dialogClass.Proc = windows.NewCallback(func(h uintptr, msg uint32, w, l uintptr) uintptr {
 		switch msg {
@@ -372,24 +408,26 @@ func Run(store *tunnel.Store) error {
 		return call("DefWindowProcW", h, uintptr(msg), w, l)
 	})
 	call("RegisterClassExW", uintptr(unsafe.Pointer(&dialogClass)))
-	height := u.s(480)
+	height := u.s(660)
 	screenHeight := int(call("GetSystemMetrics", 1)) - u.s(70)
 	if height > screenHeight {
 		height = screenHeight
 	}
-	u.window = call("CreateWindowExW", 0, uintptr(unsafe.Pointer(mainClass.Name)), uintptr(unsafe.Pointer(wide("LinkLAN"))), 0x00cf0000, 0x80000000, 0x80000000, uintptr(u.s(360)), uintptr(height), 0, 0, u.instance, 0)
+	u.window = call("CreateWindowExW", 0, uintptr(unsafe.Pointer(mainClass.Name)), uintptr(unsafe.Pointer(wide("LinkLAN"))), 0x820e0000, 0x80000000, 0x80000000, uintptr(u.s(380)), uintptr(height), 0, 0, u.instance, 0)
 	if u.window == 0 {
 		return fmt.Errorf("Не удалось создать окно LinkLAN")
 	}
 	u.menu()
+	u.add(u.window, u.controls, 510, "BUTTON", "—", 0, 0, 0, 0, 0xb)
+	u.add(u.window, u.controls, 511, "BUTTON", "×", 0, 0, 0, 0, 0xb)
 	u.add(u.window, u.controls, 100, "BUTTON", "", 22, 23, 46, 46, 0xb)
 	u.add(u.window, u.controls, 1004, "STATIC", cfg.DeviceName, 82, 16, 250, 22, 0x4080)
 	send(u.controls[1004], 0x30, u.boldFont, 1)
-	u.add(u.window, u.controls, 1005, "STATIC", "VPN отключён", 82, 41, 250, 20, 0x4080)
-	u.add(u.window, u.controls, 1006, "STATIC", "Укажите домен сервера", 82, 64, 250, 18, 0x4080)
+	u.add(u.window, u.controls, 1005, "STATIC", "VPN отключён", 82, 41, 250, 20, 0x4180)
+	u.add(u.window, u.controls, 1006, "BUTTON", "Не в сети", 82, 64, 250, 18, 0xb)
 	u.add(u.window, u.controls, 200, "BUTTON", "+ Создать сеть", 10, 96, 155, 28, 0xb)
 	u.add(u.window, u.controls, 201, "BUTTON", "Присоединиться", 173, 96, 155, 28, 0xb)
-	u.add(u.window, u.controls, 3000, "SysTreeView32", "", 10, 136, 318, 200, 0x00200027)
+	u.add(u.window, u.controls, 3000, "SysTreeView32", "", 10, 136, 318, 200, 0x00201020)
 	u.add(u.window, u.controls, 1009, "STATIC", "Создайте сеть или присоединитесь к существующей.", 24, 154, 290, 52, 0)
 	u.add(u.window, u.controls, 300, "BUTTON", "Копировать IP", 10, 350, 112, 26, 0xb)
 	u.add(u.window, u.controls, 301, "BUTTON", "Ping", 130, 350, 58, 26, 0xb)
@@ -399,21 +437,29 @@ func Run(store *tunnel.Store) error {
 		send(u.controls[id], 0x30, u.smallFont, 1)
 	}
 	u.setTheme(cfg.Theme)
+	u.themeWindow(u.window)
 	u.layout()
 	u.header()
 	call("SetTimer", u.window, 1, 2000, 0)
 	call("ShowWindow", u.window, 1)
 	call("UpdateWindow", u.window)
-	u.requestFirewall(false, func() {
-		if cfg.Server == "" {
-			u.openDialog("server", true)
-		} else {
-			u.attach(cfg.Server, cfg.DeviceName)
-		}
-	})
+	if !uiPreview {
+		u.requestFirewall(false, func() {
+			if cfg.Server == "" {
+				u.openDialog("server", true)
+			} else {
+				u.attach(cfg.Server, cfg.DeviceName)
+			}
+		})
+	} else {
+		u.loadPreview()
+	}
 	var msg message
 	for int32(call("GetMessageW", uintptr(unsafe.Pointer(&msg)), 0, 0, 0)) > 0 {
 		if u.dialog != nil && call("IsDialogMessageW", u.dialog.Window, uintptr(unsafe.Pointer(&msg))) != 0 {
+			continue
+		}
+		if msg.Message == 0x100 && u.dialog == nil && u.mainKey(msg.WParam) {
 			continue
 		}
 		call("TranslateMessage", uintptr(unsafe.Pointer(&msg)))
@@ -424,10 +470,19 @@ func Run(store *tunnel.Store) error {
 	// Let the tunnel worker remove the adapter and firewall rule before exit.
 	u.connectMu.Lock()
 	u.connectMu.Unlock()
+	for _, menu := range u.menus {
+		call("DestroyMenu", menu)
+	}
+	if u.icon != 0 {
+		call("DestroyIcon", u.icon)
+	}
+	if u.smallIcon != 0 {
+		call("DestroyIcon", u.smallIcon)
+	}
 	if u.images != 0 {
 		commonControls.NewProc("ImageList_Destroy").Call(u.images)
 	}
-	for _, h := range []uintptr{u.font, u.boldFont, u.smallFont, u.backgroundBrush, u.panelBrush, u.fieldBrush} {
+	for _, h := range []uintptr{u.font, u.boldFont, u.networkFont, u.smallFont, u.backgroundBrush, u.panelBrush, u.fieldBrush} {
 		if h != 0 {
 			gdi.NewProc("DeleteObject").Call(h)
 		}
@@ -442,31 +497,25 @@ func (u *ui) layout() {
 	call("GetClientRect", u.window, uintptr(unsafe.Pointer(&r)))
 	w, h := int(r.Right), int(r.Bottom)
 	move := func(id, x, y, width, height int) {
-		call("MoveWindow", u.controls[id], uintptr(x), uintptr(y), uintptr(width), uintptr(height), 1)
+		call("MoveWindow", u.controls[id], uintptr(x), uintptr(y), uintptr(max(1, width)), uintptr(max(1, height)), 1)
 	}
-	pad := u.s(10)
-	gap := u.s(8)
-	bw := (w - 2*pad - gap) / 2
-	move(200, pad, u.s(96), bw, u.s(28))
-	move(201, pad+bw+gap, u.s(96), bw, u.s(28))
-	move(3000, pad, u.s(136), w-2*pad, max(u.s(40), h-u.s(218)))
-	move(1009, u.s(24), u.s(154), w-u.s(48), u.s(52))
-	move(300, pad, h-u.s(68), u.s(112), u.s(26))
-	move(301, pad+u.s(120), h-u.s(68), u.s(58), u.s(26))
-	move(1010, pad+u.s(188), h-u.s(62), max(u.s(70), w-u.s(208)), u.s(20))
-	move(999, pad, h-u.s(34), w-2*pad, u.s(30))
-	for _, id := range []int{1004, 1005, 1006} {
-		var y int
-		switch id {
-		case 1004:
-			y = 16
-		case 1005:
-			y = 41
-		case 1006:
-			y = 64
-		}
-		move(id, u.s(82), u.s(y), w-u.s(102), u.s(22))
+	pad := u.s(12)
+	for i, x := range []int{12, 82, 130} {
+		move(500+i, u.s(x), u.s(35), u.s([]int{68, 46, 70}[i]), u.s(25))
 	}
+	move(510, w-u.s(78), u.s(1), u.s(36), u.s(32))
+	move(511, w-u.s(40), u.s(1), u.s(36), u.s(32))
+	move(100, u.s(23), u.s(77), u.s(62), u.s(62))
+	move(1004, u.s(98), u.s(79), w-u.s(122), u.s(23))
+	move(1005, u.s(98), u.s(104), w-u.s(122), u.s(20))
+	move(1006, u.s(98), u.s(126), u.s(112), u.s(21))
+	// Network commands stay in the menu, like the supplied compact reference.
+	for _, id := range []int{200, 201, 300, 301, 1010} {
+		call("ShowWindow", u.controls[id], 0)
+	}
+	move(3000, pad, u.s(164), w-2*pad, max(u.s(40), h-u.s(206)))
+	move(1009, u.s(28), u.s(206), w-u.s(56), u.s(76))
+	move(999, pad, h-u.s(32), w-2*pad, u.s(26))
 	call("InvalidateRect", u.window, 0, 1)
 }
 func (u *ui) header() {
@@ -477,18 +526,22 @@ func (u *ui) header() {
 		state = "Подключение…"
 	}
 	for _, v := range u.views {
-		if v.Network.ID == u.activeID && u.engine != nil {
-			state = v.Network.IP + "  ·  В сети"
+		if v.Network.ID == u.activeID && (u.engine != nil || u.preview) {
+			state = v.Network.IP
 		}
 	}
 	set(u.controls[1005], state)
-	domain := strings.TrimPrefix(strings.TrimPrefix(cfg.Server, "https://"), "http://")
-	if domain == "" {
-		domain = "Укажите домен сервера"
-	} else if u.api == nil {
-		domain += " · нет подключения"
+	badge := "Не в сети"
+	if u.api != nil {
+		badge = "Сервер доступен"
 	}
-	set(u.controls[1006], domain)
+	if u.wanted {
+		badge = "Подключение…"
+	}
+	if u.engine != nil || u.preview {
+		badge = "В сети"
+	}
+	set(u.controls[1006], badge)
 	call("InvalidateRect", u.controls[100], 0, 1)
 	call("EnableWindow", u.controls[300], boolArg(u.selected().PeerID != ""))
 	call("EnableWindow", u.controls[301], boolArg(u.selected().PeerID != ""))
@@ -719,10 +772,17 @@ func (u *ui) notify(l uintptr) uintptr {
 		u.header()
 		return 0
 	case -3:
-		u.action(204)
+		if u.selected().PeerID != "" {
+			u.action(301)
+		} else {
+			u.action(204)
+		}
 		return 0
 	case -5:
 		u.contextMenu()
+		return 0
+	case -2:
+		u.toggleHitNetwork()
 		return 0
 	case -12:
 		d := (*customDraw)(unsafe.Pointer(l))
@@ -730,21 +790,10 @@ func (u *ui) notify(l uintptr) uintptr {
 			return 0x20
 		}
 		if d.Stage == 0x10001 {
-			d.Text = u.palette.Text
-			entry := u.items[d.Item]
-			if p, ok := u.peer(entry); ok {
-				gdi.NewProc("SelectObject").Call(d.DC, u.font)
-				if state := u.echo(p.ID, entry.NetworkID); !state.Measured || !state.Reachable {
-					d.Text = u.palette.Muted
-				}
-			} else {
-				gdi.NewProc("SelectObject").Call(d.DC, u.boldFont)
-			}
-			if d.State&1 != 0 {
-				d.Text = rgb(255, 255, 255)
-			}
-			return 2
+			u.drawTreeRow(d)
+			return 4
 		}
+
 	}
 	return 0
 }
@@ -904,7 +953,7 @@ func (u *ui) openDialog(kind string, first bool) {
 	if u.busy {
 		return
 	}
-	if kind != "server" && u.api == nil {
+	if kind != "server" && u.api == nil && !u.preview {
 		set(u.controls[999], "Укажите сервер в меню «Система»")
 		u.openDialog("server", true)
 		return
@@ -923,7 +972,7 @@ func (u *ui) openDialog(kind string, first bool) {
 	call("GetWindowRect", u.window, uintptr(unsafe.Pointer(&parent)))
 	x := (parent.Left + parent.Right - int32(u.s(380))) / 2
 	y := parent.Top + int32(u.s(75))
-	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x80c80000, uintptr(x), uintptr(y), uintptr(u.s(380)), uintptr(u.s(height)), u.window, 0, u.instance, 0)
+	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(x), uintptr(y), uintptr(u.s(380)), uintptr(u.s(height)), u.window, 0, u.instance, 0)
 	d := &clientDialog{Window: h, Kind: kind, First: first, Controls: map[int]uintptr{}}
 	u.dialog = d
 	label := func(id int, title string, y int) { u.add(h, d.Controls, id, "STATIC", title, 18, y, 328, 22, 0) }
@@ -988,6 +1037,7 @@ func (u *ui) openDialog(kind string, first bool) {
 	}
 	u.add(h, d.Controls, 1, "BUTTON", caption, 114, height-78, 138, 32, 0xb)
 	u.add(h, d.Controls, 2, "BUTTON", "Отмена", 266, height-78, 90, 32, 0xb)
+	u.themeWindow(h)
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)
 	call("SetFocus", d.Controls[1000])
@@ -1004,6 +1054,14 @@ func (u *ui) closeDialog() {
 	call("SetForegroundWindow", u.window)
 }
 func (u *ui) submitDialog() {
+	if u.dialog != nil && (u.dialog.Kind == "properties" || u.dialog.Kind == "info") {
+		u.closeDialog()
+		return
+	}
+	if u.preview {
+		notice(u.window, "Предпросмотр", "Это автономный предпросмотр: настройки не сохраняются и подключения не выполняются.")
+		return
+	}
 	d := u.dialog
 	if d == nil || u.busy {
 		return
@@ -1120,15 +1178,15 @@ func (u *ui) contextMenu() {
 	if !ok {
 		return
 	}
-	menu := call("CreatePopupMenu")
+	menu := u.newMenu()
 	defer call("DestroyMenu", menu)
 	add := func(id int, label string) {
-		call("AppendMenuW", menu, 0, uintptr(id), uintptr(unsafe.Pointer(wide(label))))
+		u.menuItem(menu, id, label)
 	}
 	if entry.PeerID != "" {
 		add(300, "Копировать IP")
 		add(301, "Ping")
-		add(302, "Информация")
+		add(302, "Свойства")
 		if n.OwnerID == u.userID && entry.PeerID != u.deviceID() {
 			add(303, "Удалить участника")
 			add(304, "Заблокировать")
@@ -1152,6 +1210,31 @@ func (u *ui) contextMenu() {
 	}
 }
 func (u *ui) action(id int) {
+	if u.preview && (id == 102 || id == 105) {
+		return
+	}
+	if id >= 500 && id <= 502 {
+		u.showTopMenu(id)
+		return
+	}
+	if id == 510 {
+		call("ShowWindow", u.window, 6)
+		return
+	}
+	if id == 511 {
+		call("PostMessageW", u.window, 0x10, 0, 0)
+		return
+	}
+	if id == 1005 {
+		for _, v := range u.views {
+			if v.Network.ID == u.activeID && v.Network.IP != "" {
+				clipboard(u.window, v.Network.IP)
+				set(u.controls[999], "IP скопирован: "+v.Network.IP)
+				return
+			}
+		}
+	}
+
 	if id == 102 {
 		u.requestFirewall(true, func() {
 			if u.wanted {
@@ -1164,6 +1247,14 @@ func (u *ui) action(id int) {
 	}
 	if id == 106 {
 		call("PostMessageW", u.window, 0x10, 0, 0)
+		return
+	}
+	if id == 107 {
+		u.openDialog("server", false)
+		if u.dialog != nil {
+			call("SetFocus", u.dialog.Controls[1001])
+			send(u.dialog.Controls[1001], 0xb1, 0, ^uintptr(0))
+		}
 		return
 	}
 	if id == 101 {
@@ -1305,7 +1396,7 @@ func (u *ui) action(id int) {
 					}
 				})
 			}
-			u.post(func() { notice(u.window, "Ping "+peer.IP, result) })
+			u.post(func() { u.showMessage("Ping "+peer.IP, result) })
 			return nil
 		})
 	case 302:
@@ -1325,7 +1416,7 @@ func (u *ui) action(id int) {
 					}
 				}
 			}
-			notice(u.window, "Информация", fmt.Sprintf("Компьютер: %s\nСеть: %s\nIP: %s\nСоединение: %s\nКлюч: %x", peer.Name, n.Name, peer.IP, route, fingerprint[:12]))
+			u.showProperties(peer, n, route, fmt.Sprintf("%x", fingerprint[:12]))
 		}
 	case 303, 304, 305:
 		if api == nil || !hasPeer || !hasNetwork || n.OwnerID != u.userID || peer.ID == u.deviceID() {

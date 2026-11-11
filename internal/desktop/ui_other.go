@@ -9,3 +9,7 @@ import (
 
 func EnsureAdmin() (bool, error)    { return false, fmt.Errorf("Windows only") }
 func Run(store *tunnel.Store) error { return fmt.Errorf("Windows 10/11 x64 only") }
+
+func Preview(store *tunnel.Store) error { return fmt.Errorf("Windows UI preview only") }
+
+func CheckIcon() error { return nil }
