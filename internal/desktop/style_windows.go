@@ -5,6 +5,7 @@ package desktop
 import (
 	"fmt"
 	"math"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -20,14 +21,24 @@ func (u *ui) label(dc uintptr, value string, r rect, font uintptr, color uint32,
 	gdi.NewProc("SelectObject").Call(dc, old)
 }
 func (u *ui) paintChrome(dc uintptr, r rect) {
-	title := rect{0, 0, r.Right, int32(u.s(34))}
+	title := rect{0, 0, r.Right, int32(u.s(compactTheme.Title))}
 	call("FillRect", dc, uintptr(unsafe.Pointer(&title)), u.panelBrush)
-	x := int(r.Right)/2 - u.s(55)
+	x := int(r.Right)/2 - u.s(56)
 	if u.smallIcon != 0 {
-		call("DrawIconEx", dc, uintptr(x), uintptr(u.s(6)), u.smallIcon, uintptr(u.s(23)), uintptr(u.s(23)), 0, 0, 3)
+		call("DrawIconEx", dc, uintptr(x), uintptr(u.s(4)), u.smallIcon, uintptr(u.s(24)), uintptr(u.s(24)), 0, 0, 3)
 	}
-	u.label(dc, "LINKLAN", rect{int32(x + u.s(29)), 0, r.Right - int32(u.s(82)), int32(u.s(34))}, u.boldFont, u.palette.Accent, 4)
-	u.rounded(dc, rect{int32(u.s(12)), int32(u.s(68)), r.Right - int32(u.s(12)), int32(u.s(154))}, u.panelBrush)
+	u.label(dc, "LINKLAN", rect{int32(x + u.s(29)), 0, r.Right - int32(u.s(75)), int32(u.s(compactTheme.Title))}, u.boldFont, u.palette.Accent, 4)
+	u.roundedRadius(dc, rect{int32(u.s(compactTheme.Padding)), int32(u.s(compactTheme.CardTop)), r.Right - int32(u.s(compactTheme.Padding)), int32(u.s(compactTheme.CardTop + compactTheme.CardHeight))}, u.panelBrush, compactTheme.Radius)
+	call("FrameRect", dc, uintptr(unsafe.Pointer(&r)), u.panelBrush)
+	pen, _, _ := gdi.NewProc("CreatePen").Call(0, 1, uintptr(u.palette.Muted))
+	old, _, _ := gdi.NewProc("SelectObject").Call(dc, pen)
+	for i := 0; i < 3; i++ {
+		gap := int32(u.s(3 + i*3))
+		gdi.NewProc("MoveToEx").Call(dc, uintptr(r.Right-gap), uintptr(r.Bottom-3), 0)
+		gdi.NewProc("LineTo").Call(dc, uintptr(r.Right-3), uintptr(r.Bottom-gap))
+	}
+	gdi.NewProc("SelectObject").Call(dc, old)
+	gdi.NewProc("DeleteObject").Call(pen)
 }
 func (u *ui) drawPower(d *drawItem) {
 	r := d.Rect
@@ -47,7 +58,10 @@ func (u *ui) drawPower(d *drawItem) {
 						} else if distance > 0.89 {
 							c = rgb(214, 240, 245)
 						} else {
-							highlight := uint32(22 * (1 - float64(y)/float64(h)))
+							highlight := uint32(22*(1-float64(y)/float64(h)) + 12*math.Max(0, 1-distance))
+							if u.hotButton == d.Window {
+								highlight += 8
+							}
 							if u.wanted {
 								c = rgb(19+highlight, 155+highlight, 177+highlight)
 							} else {
@@ -83,8 +97,16 @@ func (u *ui) drawPower(d *drawItem) {
 	u.label(d.DC, state, bottom, u.smallFont, rgb(255, 255, 255), 1|4)
 }
 func (u *ui) loadIcons() {
+	if u.iconCache == nil {
+		u.iconCache = map[int][2]uintptr{}
+	}
+	if pair, ok := u.iconCache[u.dpi]; ok {
+		u.icon, u.smallIcon = pair[0], pair[1]
+		return
+	}
 	u.icon = call("LoadImageW", u.instance, 1, 1, uintptr(u.s(48)), uintptr(u.s(48)), 0)
 	u.smallIcon = call("LoadImageW", u.instance, 1, 1, uintptr(u.s(24)), uintptr(u.s(24)), 0)
+	u.iconCache[u.dpi] = [2]uintptr{u.icon, u.smallIcon}
 }
 func (u *ui) hitTest(h, l uintptr) uintptr {
 	var r rect
@@ -117,7 +139,7 @@ func (u *ui) hitTest(h, l uintptr) uintptr {
 	if bottom {
 		return 15
 	}
-	if y < int32(u.s(34)) && x < width-int32(u.s(82)) {
+	if y < int32(u.s(compactTheme.Title)) && x < width-int32(u.s(82)) {
 		return 2
 	}
 	return 1
@@ -132,17 +154,28 @@ func (u *ui) drawTreeRow(d *customDraw) {
 	r := rect{0, d.Rect.Top, bounds.Right, d.Rect.Bottom + 1}
 	call("FillRect", d.DC, uintptr(unsafe.Pointer(&r)), u.backgroundBrush)
 	if entry.PeerID == "" {
-		card := r
-		card.Top += int32(u.s(3))
-		card.Bottom -= int32(u.s(1))
-		u.rounded(d.DC, card, u.panelBrush)
 		expanded := treeItem{Mask: 8, Handle: d.Item, StateMask: 0x20}
 		send(u.controls[3000], 0x113e, 0, uintptr(unsafe.Pointer(&expanded)))
+		hasChildren := send(u.controls[3000], 0x110a, 4, d.Item) != 0
+		open := expanded.State&0x20 != 0 && hasChildren
+		card := r
+		card.Top += int32(u.s(4))
+		if open {
+			card.Bottom += int32(u.s(7))
+		}
+		u.roundedRadius(d.DC, card, u.panelBrush, 6)
+		if open {
+			bottom := r
+			bottom.Top = card.Top + int32(u.s(6))
+			call("FillRect", d.DC, uintptr(unsafe.Pointer(&bottom)), u.panelBrush)
+		}
 		arrow := "▸"
-		if expanded.State&0x20 != 0 {
+		if open {
 			arrow = "▾"
 		}
-		u.label(d.DC, arrow, rect{int32(u.s(6)), r.Top, int32(u.s(24)), r.Bottom}, u.font, u.palette.Text, 4)
+		tr := r
+		tr.Top += int32(u.s(3))
+		u.label(d.DC, arrow, rect{int32(u.s(7)), tr.Top, int32(u.s(23)), tr.Bottom}, u.menuFont, u.palette.Text, 4)
 		n, _ := u.network(entry.NetworkID)
 		name := n.Name
 		if n.Blocked {
@@ -150,26 +183,30 @@ func (u *ui) drawTreeRow(d *customDraw) {
 		} else if n.Status == "pending" {
 			name += " · заявка"
 		}
-		u.label(d.DC, name, rect{int32(u.s(29)), r.Top, r.Right - int32(u.s(12)), r.Bottom}, u.networkFont, u.palette.Text, 4|0x8000)
+		u.label(d.DC, name, rect{int32(u.s(27)), tr.Top, r.Right - int32(u.s(10)), tr.Bottom}, u.networkFont, u.palette.Text, 4|0x8000)
 		return
 	}
 	if send(u.controls[3000], 0x110a, 1, d.Item) == 0 {
-		u.rounded(d.DC, r, u.panelBrush)
-		upper := r
-		upper.Bottom = upper.Top + (upper.Bottom-upper.Top)/2
-		call("FillRect", d.DC, uintptr(unsafe.Pointer(&upper)), u.panelBrush)
+		u.roundedRadius(d.DC, r, u.panelBrush, 6)
+		top := r
+		top.Bottom = top.Top + (top.Bottom-top.Top)/2
+		call("FillRect", d.DC, uintptr(unsafe.Pointer(&top)), u.panelBrush)
 	} else {
 		call("FillRect", d.DC, uintptr(unsafe.Pointer(&r)), u.panelBrush)
 	}
 	selected := send(u.controls[3000], 0x110a, 9, 0) == d.Item
-	if selected {
-		b := brush(rgb(43, 83, 117))
+	if selected || u.hovered == d.Item {
+		color := compactColors.Hover
+		if selected {
+			color = compactColors.Selection
+		}
+		b := brush(color)
 		sr := r
-		sr.Left += int32(u.s(6))
-		sr.Right -= int32(u.s(6))
+		sr.Left += int32(u.s(4))
+		sr.Right -= int32(u.s(4))
 		sr.Top++
 		sr.Bottom--
-		u.rounded(d.DC, sr, b)
+		u.roundedRadius(d.DC, sr, b, 11)
 		gdi.NewProc("DeleteObject").Call(b)
 	}
 	peer, ok := u.peer(entry)
@@ -178,34 +215,46 @@ func (u *ui) drawTreeRow(d *customDraw) {
 	}
 	state := u.echo(peer.ID, entry.NetworkID)
 	image := signalImage(state)
+	if !peer.Online {
+		image = 0
+	}
 	for bar := 0; bar < 4; bar++ {
 		color := u.palette.Muted
 		if image >= 2 && bar < int(image)-1 {
 			color = u.palette.Online
+			if image == 3 {
+				color = compactColors.Warning
+			} else if image == 2 {
+				color = compactColors.Bad
+			}
 		}
-		if image == 1 && bar == 0 {
-			color = rgb(231, 107, 113)
-		}
+
 		if image < 2 && bar > 0 {
 			color = u.palette.Field
 		}
 		bottom := r.Top + (r.Bottom-r.Top)/2 + int32(u.s(6))
-		br := rect{int32(u.s(15 + bar*4)), bottom - int32(u.s(3+bar*3)), int32(u.s(18 + bar*4)), bottom}
+		br := rect{int32(u.s(14 + bar*4)), bottom - int32(u.s(3+bar*3)), int32(u.s(17 + bar*4)), bottom}
 		b := brush(color)
 		call("FillRect", d.DC, uintptr(unsafe.Pointer(&br)), b)
 		gdi.NewProc("DeleteObject").Call(b)
 	}
+	if image <= 1 {
+		u.label(d.DC, "×", rect{int32(u.s(4)), r.Top, int32(u.s(14)), r.Bottom}, u.smallFont, u.palette.Muted, 4)
+	}
 	color := u.palette.Text
+	if selected || u.hovered == d.Item {
+		color = rgb(255, 255, 255)
+	}
 	if !peer.Online && !selected {
 		color = u.palette.Muted
 	}
-	split := max(int32(u.s(130)), r.Right-int32(u.s(126)))
+	split := max(int32(u.s(130)), r.Right-int32(u.s(116)))
 	name := peer.Name
 	ip := peer.IP
 	if peer.Status == "pending" {
 		ip = "Ожидает принятия"
 	}
-	u.label(d.DC, name, rect{int32(u.s(37)), r.Top, split - int32(u.s(8)), r.Bottom}, u.smallFont, color, 4|0x8000)
+	u.label(d.DC, name, rect{int32(u.s(34)), r.Top, split - int32(u.s(8)), r.Bottom}, u.smallFont, color, 4|0x8000)
 	u.label(d.DC, ip, rect{split, r.Top, r.Right - int32(u.s(13)), r.Bottom}, u.smallFont, color, 2|4|0x8000)
 }
 func (u *ui) toggleHitNetwork() {
@@ -217,6 +266,7 @@ func (u *ui) toggleHitNetwork() {
 	if e, ok := u.items[item]; ok && e.PeerID == "" {
 		send(u.controls[3000], 0x1102, 3, item)
 		u.expanded[e.NetworkID] = !u.expanded[e.NetworkID]
+		u.scheduleWindowSave()
 	}
 }
 
@@ -265,7 +315,7 @@ func (u *ui) drawMenu(d *drawItem) {
 		call("FillRect", d.DC, uintptr(unsafe.Pointer(&line)), u.backgroundBrush)
 		return
 	}
-	u.label(d.DC, u.menuLabels[int(d.Item)], r, u.font, u.palette.Text, 4)
+	u.label(d.DC, u.menuLabels[int(d.Item)], r, u.menuFont, u.palette.Text, 4)
 }
 func (u *ui) showTopMenu(id int) {
 	h := u.controls[id]
@@ -336,6 +386,10 @@ func (u *ui) loadPreview() {
 	u.userID = "preview-user"
 	u.store.Update(func(c *tunnel.Config) { c.DeviceName = "and-home" })
 	u.views = []model.NetworkView{}
+	if u.options.LargePreview {
+		u.largePreview()
+		return
+	}
 	names := []string{"chukotka-museum", "lknet-home", "LinkLAN · друзья"}
 	for i, name := range names {
 		id := fmt.Sprint(i)
@@ -361,6 +415,8 @@ func (u *ui) themeWindow(h uintptr) {
 	if u.store.Snapshot().Theme == "light" {
 		dark = 0
 	}
+	send(h, 0x80, 1, u.icon)
+	send(h, 0x80, 0, u.smallIcon)
 	windows.NewLazySystemDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(h, 20, uintptr(unsafe.Pointer(&dark)), 4)
 }
 
@@ -392,4 +448,30 @@ func (u *ui) showMessage(title, body string) {
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)
 	call("SetFocus", d.Controls[2])
+}
+
+func (u *ui) roundedRadius(dc uintptr, r rect, fill uintptr, radius int) {
+	oldBrush, _, _ := gdi.NewProc("SelectObject").Call(dc, fill)
+	pen, _, _ := gdi.NewProc("GetStockObject").Call(8)
+	oldPen, _, _ := gdi.NewProc("SelectObject").Call(dc, pen)
+	gdi.NewProc("RoundRect").Call(dc, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right), uintptr(r.Bottom), uintptr(u.s(radius*2)), uintptr(u.s(radius*2)))
+	gdi.NewProc("SelectObject").Call(dc, oldBrush)
+	gdi.NewProc("SelectObject").Call(dc, oldPen)
+}
+func (u *ui) largePreview() {
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprint(i)
+		v := model.NetworkView{Network: model.Network{ID: id, Name: fmt.Sprintf("Сеть %02d", i+1), IP: "26.27.94.226", Status: "approved", OwnerID: "preview-owner"}}
+		for j := 0; j < 10; j++ {
+			p := model.Peer{ID: fmt.Sprintf("%d-%d", i, j), Name: fmt.Sprintf("Компьютер-%02d · длинное имя", i*10+j), IP: fmt.Sprintf("26.%d.17.%d", i+10, j+10), Status: "approved", Online: j%4 != 0}
+			v.Peers = append(v.Peers, p)
+			u.echoes[p.ID] = echoState{Measured: true, Reachable: p.Online, RTT: time.Duration(j*30) * time.Millisecond}
+		}
+		u.views = append(u.views, v)
+		u.expanded[id] = true
+	}
+	u.activeID = "0"
+	u.wanted = true
+	u.renderTree()
+	u.header()
 }

@@ -75,7 +75,7 @@ func (u *ui) signalIcons() {
 	old := u.images
 	u.images = list
 	send(u.controls[3000], 0x1109, 0, list)
-	send(u.controls[3000], 0x111b, uintptr(u.s(24)), 0)
+	send(u.controls[3000], 0x111b, uintptr(u.s(compactTheme.Row)), 0)
 	if old != 0 {
 		commonControls.NewProc("ImageList_Destroy").Call(old)
 	}

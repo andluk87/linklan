@@ -26,8 +26,8 @@ func TestICMPBarsDistinguishUnmeasuredUnreachableAndLatency(t *testing.T) {
 		{echoState{Measured: true, Reachable: true, RTT: 0}, 5},
 		{echoState{Measured: true, Reachable: true, RTT: 50 * time.Millisecond}, 5},
 		{echoState{Measured: true, Reachable: true, RTT: 51 * time.Millisecond}, 4},
-		{echoState{Measured: true, Reachable: true, RTT: 151 * time.Millisecond}, 3},
-		{echoState{Measured: true, Reachable: true, RTT: 301 * time.Millisecond}, 2},
+		{echoState{Measured: true, Reachable: true, RTT: 101 * time.Millisecond}, 3},
+		{echoState{Measured: true, Reachable: true, RTT: 201 * time.Millisecond}, 2},
 	}
 	for _, test := range cases {
 		if got := signalImage(test.state); got != test.image {

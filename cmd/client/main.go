@@ -19,6 +19,11 @@ import (
 )
 
 func main() {
+	startHidden := flag.Bool("start-hidden", false, "Start in the notification area")
+	quit := flag.Bool("quit", false, "Close an existing LinkLAN instance")
+	autostart := flag.String("autostart", "", "Manage startup: enable, disable or status")
+	largePreview := flag.Bool("ui-preview-large", false, "Preview 50 networks and 500 participants offline")
+	previewDPI := flag.Int("ui-preview-dpi", 0, "Force offline preview DPI: 96, 120, 144 or 192")
 	preview := flag.Bool("ui-preview", false, "Preview the interface offline without administrator access or VPN")
 	selfTest := flag.Bool("self-test", false, "Run local binary self-test")
 	version := flag.Bool("version", false, "Show version")
@@ -45,12 +50,28 @@ func main() {
 		}
 		return
 	}
-	if *preview {
+	if *preview || *largePreview {
 		store := &tunnel.Store{Data: tunnel.Config{Theme: "dark", DeviceName: "and-home"}}
-		if e := desktop.Preview(store); e != nil {
+		if e := desktop.RunWithOptions(store, desktop.Options{Preview: true, StartHidden: *startHidden, LargePreview: *largePreview, PreviewDPI: *previewDPI}); e != nil {
 			fmt.Fprintln(os.Stderr, e)
 			os.Exit(1)
 		}
+		return
+	}
+	if *autostart == "status" {
+		enabled, e := desktop.StartupEnabled()
+		if e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			os.Exit(1)
+		}
+		fmt.Println(enabled)
+		return
+	}
+	if *autostart != "" && *autostart != "enable" && *autostart != "disable" {
+		fmt.Fprintln(os.Stderr, "--autostart: enable, disable or status")
+		os.Exit(2)
+	}
+	if !*headless && !*quit && *autostart == "" && desktop.RestoreExisting(*startHidden) {
 		return
 	}
 	admin, e := desktop.EnsureAdmin()
@@ -59,6 +80,28 @@ func main() {
 		os.Exit(1)
 	}
 	if !admin {
+		return
+	}
+	if *quit {
+		if e := desktop.QuitExisting(); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			os.Exit(1)
+		}
+		return
+	}
+	if *autostart != "" {
+		enabled := *autostart == "enable"
+		if e := desktop.ConfigureAutostart(enabled); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+			os.Exit(1)
+		}
+		if store, e := tunnel.LoadStore(); e == nil {
+			if e = store.Update(func(c *tunnel.Config) { c.StartAtLogon = &enabled }); e != nil {
+				fmt.Fprintln(os.Stderr, e)
+				os.Exit(1)
+			}
+		}
+		fmt.Println("Autostart:", enabled)
 		return
 	}
 	root, _ := os.UserConfigDir()
@@ -111,7 +154,7 @@ func main() {
 		<-engine.Done()
 		return
 	}
-	if e = desktop.Run(store); e != nil {
+	if e = desktop.RunWithOptions(store, desktop.Options{StartHidden: *startHidden}); e != nil {
 		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}

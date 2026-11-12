@@ -22,9 +22,9 @@ func signalImage(state echoState) int32 {
 	switch {
 	case state.RTT <= 50*time.Millisecond:
 		return 5
-	case state.RTT <= 150*time.Millisecond:
+	case state.RTT <= 100*time.Millisecond:
 		return 4
-	case state.RTT <= 300*time.Millisecond:
+	case state.RTT <= 200*time.Millisecond:
 		return 3
 	default:
 		return 2

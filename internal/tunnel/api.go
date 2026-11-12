@@ -27,10 +27,18 @@ type Profile struct {
 	Refresh    string            `json:"refresh_token"`
 	PeerKeys   map[string]string `json:"peer_keys"`
 }
+type WindowState struct {
+	X, Y, Width, Height int
+	Positioned          bool
+}
+
 type Config struct {
 	Server, Email, DeviceName string
 	Theme                     string
 	AutoConnect               bool
+	StartAtLogon              *bool
+	Window                    WindowState
+	ExpandedNetworks          map[string]bool
 	FirewallAllowed           bool
 	NetworkID                 string
 	AllowHTTP                 bool `json:"-"`

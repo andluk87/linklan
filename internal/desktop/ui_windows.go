@@ -49,7 +49,11 @@ func text(h uintptr) string {
 	call("GetWindowTextW", h, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
 	return windows.UTF16ToString(b)
 }
-func set(h uintptr, s string) { call("SetWindowTextW", h, uintptr(unsafe.Pointer(wide(s)))) }
+func set(h uintptr, s string) {
+	if h != 0 && text(h) != s {
+		call("SetWindowTextW", h, uintptr(unsafe.Pointer(wide(s))))
+	}
+}
 
 //go:uintptrescapes
 func send(h uintptr, msg uint32, w, l uintptr) uintptr {

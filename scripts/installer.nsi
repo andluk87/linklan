@@ -3,7 +3,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef VERSION
-!define VERSION "0.3.0"
+!define VERSION "0.4.0"
 !endif
 !define MUI_ICON "${__FILEDIR__}/../assets/linklan.ico"
 !define MUI_UNICON "${__FILEDIR__}/../assets/linklan.ico"
@@ -16,7 +16,31 @@ RequestExecutionLevel admin
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "Russian"
+!macro CloseLinkLAN
+  StrCpy $1 0
+close_client_loop:
+  FindWindow $0 "LinkLANClientV2"
+  StrCmp $0 0 close_client_done
+  SendMessage $0 0x111 106 0 /TIMEOUT=1000
+  Sleep 200
+  IntOp $1 $1 + 1
+  IntCmp $1 50 close_client_failed close_client_loop close_client_failed
+close_client_failed:
+  MessageBox MB_OK|MB_ICONSTOP "LinkLAN ещё работает. Завершите его через меню трея → Выход и повторите." /SD IDOK
+  Abort
+close_client_done:
+!macroend
+Function un.onInit
+  IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
+  ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+  !insertmacro CloseLinkLAN
+  IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
+  ExecWait '"$INSTDIR\LinkLAN.exe" --autostart disable' $0
+FunctionEnd
 Function .onInit
+  IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
+  ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+  !insertmacro CloseLinkLAN
   ${IfNot} ${RunningX64}
     MessageBox MB_OK "Требуется Windows x64."
     Abort
