@@ -23,11 +23,12 @@ import (
 	"linklan/internal/protocol"
 )
 
-//go:embed schema.sql admin.html
+//go:embed schema.sql admin.html admin.js
 var assets embed.FS
 
 type Config struct {
 	Database, Redis, Secret, Relay, STUN, AdminEmail, SMTP, SMTPUser, SMTPPassword, MailFrom string
+	AdminToken                                                                               string
 	TrustProxy                                                                               bool
 }
 type Server struct {
@@ -58,6 +59,9 @@ func who(r *http.Request) principal { p, _ := r.Context().Value(principalKey{}).
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	if len(cfg.Secret) < 32 || cfg.Relay == "" || cfg.STUN == "" {
 		return nil, fmt.Errorf("JWT_SECRET (32+ bytes), RELAY_PUBLIC_ADDRESS, STUN_PUBLIC_ADDRESS are required")
+	}
+	if cfg.AdminToken != "" && len(cfg.AdminToken) < 32 {
+		return nil, fmt.Errorf("ADMIN_TOKEN must be at least 32 bytes")
 	}
 	db, e := pgxpool.New(ctx, cfg.Database)
 	if e != nil {
@@ -154,13 +158,16 @@ func (s *Server) authenticated(f endpoint) endpoint {
 	}
 }
 func (s *Server) admin(f endpoint) endpoint {
-	return s.authenticated(func(w http.ResponseWriter, r *http.Request) error {
-		if !who(r).User.Admin {
-			return forbidden()
+	return func(w http.ResponseWriter, r *http.Request) error {
+		w.Header().Set("Cache-Control", "no-store")
+		supplied := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if len(s.cfg.AdminToken) >= 32 && tokenEqual(supplied, s.cfg.AdminToken) {
+			return f(w, r)
 		}
-		return f(w, r)
-	})
+		return apiError{401, "Неверный токен администратора"}
+	}
 }
+
 func (s *Server) audit(ctx context.Context, uid, action, object string) {
 	if _, e := s.db.Exec(ctx, `INSERT INTO audit_log(user_id,action,object_id) VALUES(NULLIF($1,'')::uuid,$2,$3)`, uid, action, object); e != nil {
 		slog.Error("audit_write_failed", "action", action)
@@ -229,12 +236,15 @@ func (s *Server) Router() http.Handler {
 	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := assets.ReadFile("admin.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'")
 		w.Write(b)
 	})
 	m.HandleFunc("GET /admin.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript")
-		w.Write([]byte(adminJS))
+		b, _ := assets.ReadFile("admin.js")
+		w.Write(b)
 	})
 	public := map[string]endpoint{"POST /auth/register": s.register, "POST /auth/login": s.login, "POST /auth/refresh": s.refresh, "POST /auth/forgot": s.forgot, "POST /auth/reset": s.reset, "POST /auth/device/challenge": s.deviceAccessChallenge, "POST /auth/device": s.deviceAccess}
 	for p, f := range public {
@@ -247,7 +257,12 @@ func (s *Server) Router() http.Handler {
 	m.HandleFunc("GET /networks/state", s.handle(s.authenticated(s.networkState)))
 	m.HandleFunc("GET /admin/state", s.handle(s.admin(s.adminState)))
 	m.HandleFunc("POST /admin/block", s.handle(s.admin(s.adminBlock)))
-	return s.limit(m)
+	m.HandleFunc("POST /admin/manage", s.handle(s.admin(s.adminManage)))
+	m.HandleFunc("GET /admin/members", s.handle(s.admin(s.adminMembers)))
+	m.HandleFunc("POST /admin/member", s.handle(s.admin(s.adminMember)))
+	m.HandleFunc("POST /admin/create", s.handle(s.admin(s.adminCreate)))
+	m.HandleFunc("POST /admin/settings", s.handle(s.admin(s.adminSettings)))
+	return s.limit(s.admission(m))
 }
 func (s *Server) limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -296,5 +311,5 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func EnvConfig() Config {
-	return Config{Database: os.Getenv("DATABASE_URL"), Redis: os.Getenv("REDIS_URL"), Secret: os.Getenv("JWT_SECRET"), Relay: os.Getenv("RELAY_PUBLIC_ADDRESS"), STUN: os.Getenv("STUN_PUBLIC_ADDRESS"), AdminEmail: strings.ToLower(os.Getenv("ADMIN_EMAIL")), SMTP: os.Getenv("SMTP_ADDRESS"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), MailFrom: os.Getenv("SMTP_FROM"), TrustProxy: os.Getenv("TRUST_PROXY") == "true"}
+	return Config{AdminToken: readAdminToken(), Database: os.Getenv("DATABASE_URL"), Redis: os.Getenv("REDIS_URL"), Secret: os.Getenv("JWT_SECRET"), Relay: os.Getenv("RELAY_PUBLIC_ADDRESS"), STUN: os.Getenv("STUN_PUBLIC_ADDRESS"), AdminEmail: strings.ToLower(os.Getenv("ADMIN_EMAIL")), SMTP: os.Getenv("SMTP_ADDRESS"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), MailFrom: os.Getenv("SMTP_FROM"), TrustProxy: os.Getenv("TRUST_PROXY") == "true"}
 }

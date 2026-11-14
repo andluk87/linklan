@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-var Version = "0.4.0"
+var Version = "0.5.0"
 
 func DeviceProof(challenge, publicKey, name, version string) string {
 	return "LinkLAN device access|" + challenge + "|" + publicKey + "|" + name + "|" + version

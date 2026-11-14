@@ -238,14 +238,14 @@ func TestApprovalAndAdminRole(t *testing.T) {
 	if code := request(t, h, "POST", "/networks/"+n.ID+"/members/"+b.ID+"/approve", owner.Access, map[string]string{}, nil); code != 200 {
 		t.Fatal("approve", code)
 	}
-	if code := request(t, h, "GET", "/admin/state", guest.Access, nil, nil); code != 403 {
+	if code := request(t, h, "GET", "/admin/state", guest.Access, nil, nil); code != 401 {
 		t.Fatal("nonadmin", code)
 	}
-	s.db.Exec(context.Background(), `UPDATE users SET admin=true WHERE id=$1`, owner.User.ID)
-	if code := request(t, h, "GET", "/admin/state", owner.Access, nil, nil); code != 200 {
+	s.cfg.AdminToken = strings.Repeat("integration-admin-token", 3)
+	if code := request(t, h, "GET", "/admin/state", s.cfg.AdminToken, nil, nil); code != 200 {
 		t.Fatal("admin", code)
 	}
-	if code := request(t, h, "POST", "/admin/block", owner.Access, map[string]any{"kind": "user", "id": guest.User.ID, "blocked": true}, nil); code != 200 {
+	if code := request(t, h, "POST", "/admin/block", s.cfg.AdminToken, map[string]any{"kind": "user", "id": guest.User.ID, "blocked": true}, nil); code != 200 {
 		t.Fatal("block", code)
 	}
 	if code := request(t, h, "GET", "/me", guest.Access, nil, nil); code != 401 {

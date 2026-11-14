@@ -1,0 +1,7 @@
+# Add AFTER your existing compose files. Token stays on the server host.
+services:
+  api:
+    environment:
+      ADMIN_TOKEN_FILE: /run/secrets/linklan-admin-token
+    volumes:
+      - ./.secrets/admin-token:/run/secrets/linklan-admin-token:ro

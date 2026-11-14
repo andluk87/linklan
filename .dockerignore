@@ -14,3 +14,5 @@ artifacts
 *.pem
 *.p12
 *.dpapi
+
+.secrets

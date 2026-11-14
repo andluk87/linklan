@@ -53,3 +53,10 @@ CREATE INDEX IF NOT EXISTS members_device ON network_members(device_id);
 CREATE INDEX IF NOT EXISTS audit_created ON audit_log(created_at DESC);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS device_only boolean NOT NULL DEFAULT false;
 INSERT INTO schema_version VALUES (2) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS server_settings (
+ id boolean PRIMARY KEY DEFAULT true CHECK(id),
+ registration_open boolean NOT NULL DEFAULT true,
+ maintenance boolean NOT NULL DEFAULT false
+);
+INSERT INTO server_settings(id) VALUES(true) ON CONFLICT DO NOTHING;
+INSERT INTO schema_version VALUES (3) ON CONFLICT DO NOTHING;

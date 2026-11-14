@@ -65,7 +65,7 @@ func (u *ui) drawPower(d *drawItem) {
 							if u.wanted {
 								c = rgb(19+highlight, 155+highlight, 177+highlight)
 							} else {
-								c = rgb(73+highlight, 94+highlight, 108+highlight)
+								c = rgb(176+highlight, 79+highlight, 51+highlight)
 							}
 						}
 					}
@@ -358,7 +358,7 @@ func (u *ui) showProperties(peer model.Peer, n model.Network, route, fingerprint
 	var parent rect
 	call("GetWindowRect", u.window, uintptr(unsafe.Pointer(&parent)))
 	title := "Свойства: " + peer.Name
-	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(parent.Left+int32(u.s(22))), uintptr(parent.Top+int32(u.s(100))), uintptr(u.s(340)), uintptr(u.s(400)), u.window, 0, u.instance, 0)
+	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(parent.Left+int32(u.s(22))), uintptr(parent.Top+int32(u.s(100))), uintptr(u.s(340)), uintptr(u.s(360)), u.window, 0, u.instance, 0)
 	d := &clientDialog{Window: h, Kind: "properties", Controls: map[int]uintptr{}}
 	u.dialog = d
 	role := "Участник"
@@ -369,14 +369,14 @@ func (u *ui) showProperties(peer model.Peer, n model.Network, route, fingerprint
 		title, body string
 		y, height   int
 	}{
-		{"Компьютер", fmt.Sprintf("Имя: %s\nID: %s\nIPv4: %s", peer.Name, peer.ID, peer.IP), 12, 88},
+		{"Свойства", fmt.Sprintf("Имя: %s\nID: %s\nIPv4: %s", peer.Name, peer.ID, peer.IP), 12, 88},
 		{"Состояние сети", fmt.Sprintf("Имя сети: %s\nРоль: %s", n.Name, role), 112, 67},
-		{"Статус подключения", fmt.Sprintf("Соединение: %s\nКлюч: %s", route, fingerprint), 191, 74},
+		{"Статус подключения", fmt.Sprintf("Статус: %s\nОтпечаток ключа: %s", route, fingerprint), 191, 74},
 	} {
 		u.add(h, d.Controls, section.y, "STATIC", section.title, 18, section.y, 296, 20, 0)
 		u.add(h, d.Controls, section.y+1, "STATIC", section.body, 24, section.y+25, 284, section.height-20, 0)
 	}
-	u.add(h, d.Controls, 2, "BUTTON", "Закрыть", 214, 310, 100, 30, 0xb)
+	u.add(h, d.Controls, 2, "BUTTON", "Закрыть", 214, 286, 100, 30, 0xb)
 	u.themeWindow(h)
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)

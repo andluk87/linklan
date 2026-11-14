@@ -16,3 +16,5 @@ deploy/certs/
 backups/
 *.pem
 *.p12
+
+.secrets/

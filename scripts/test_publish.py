@@ -32,7 +32,7 @@ class PublishTests(unittest.TestCase):
 
     def test_publishes_current_binary_and_preserves_source_config(self):
         for name in ['.env', '.env.production', 'publisher.key', 'private.pem', 'profile.dpapi',
-                     'deploy/certs/server.key', 'backups/private.txt', 'compose.yml', '.env.example', 'main.go']:
+                     '.secrets/admin-token', 'deploy/certs/server.key', 'backups/private.txt', 'compose.yml', '.env.example', 'main.go']:
             p = self.root / name
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(name)

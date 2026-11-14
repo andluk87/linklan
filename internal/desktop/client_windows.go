@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -76,6 +77,7 @@ type clientDialog struct {
 	Window   uintptr
 	Kind     string
 	First    bool
+	Page     int
 	Controls map[int]uintptr
 }
 type ui struct {
@@ -218,6 +220,10 @@ func (u *ui) drawButton(d *drawItem) {
 	if d.ID == 100 || d.ID == 200 || d.ID == 201 || d.ID == 1 {
 		b = u.panelBrush
 	}
+	if d.ID >= 1100 && d.ID <= 1103 && u.dialog != nil && int(d.ID)-1100 == u.dialog.Page {
+		b = brush(compactColors.Selection)
+		defer gdi.NewProc("DeleteObject").Call(b)
+	}
 	background := u.backgroundBrush
 	if d.ID == 100 {
 		background = u.panelBrush
@@ -271,6 +277,7 @@ func (u *ui) menu() {
 	u.menuItem(sys, 107, "Изменить имя компьютера…")
 	u.menuItem(sys, 101, "Сервер и настройки…")
 	u.menuItem(sys, 102, "Исключения брандмауэра…")
+	u.menuItem(sys, 108, "Админ-панель сервера…")
 	u.menuSeparator(sys)
 	u.menuItem(sys, 106, "Выход")
 	network := u.newMenu()
@@ -525,6 +532,11 @@ func runClient(store *tunnel.Store, options Options) error {
 					u.submitDialog()
 				case 2:
 					u.closeDialog()
+				case 1100, 1101, 1102, 1103:
+					u.settingsPage(int(w&0xffff) - 1100)
+				case 1110:
+					u.closeDialog()
+					u.action(108)
 				}
 			}
 			return 0
@@ -1153,11 +1165,16 @@ func (u *ui) openDialog(kind string, first bool) {
 	if kind == "join" {
 		title, height = "Присоединиться к сети", 310
 	}
+	width := 380
+	if kind == "server" && !first {
+		width = 520
+		height = 360
+	}
 	var parent rect
 	call("GetWindowRect", u.window, uintptr(unsafe.Pointer(&parent)))
-	x := (parent.Left + parent.Right - int32(u.s(380))) / 2
+	x := (parent.Left + parent.Right - int32(u.s(width))) / 2
 	y := parent.Top + int32(u.s(75))
-	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(x), uintptr(y), uintptr(u.s(380)), uintptr(u.s(height)), u.window, 0, u.instance, 0)
+	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(x), uintptr(y), uintptr(u.s(width)), uintptr(u.s(height)), u.window, 0, u.instance, 0)
 	d := &clientDialog{Window: h, Kind: kind, First: first, Controls: map[int]uintptr{}}
 	u.dialog = d
 	label := func(id int, title string, y int) { u.add(h, d.Controls, id, "STATIC", title, 18, y, 328, 22, 0) }
@@ -1223,8 +1240,16 @@ func (u *ui) openDialog(kind string, first bool) {
 		label(13, "Укажите имя и пароль либо только код.", 212)
 		caption = "Присоединиться"
 	}
-	u.add(h, d.Controls, 1, "BUTTON", caption, 114, height-78, 138, 32, 0xb)
-	u.add(h, d.Controls, 2, "BUTTON", "Отмена", 266, height-78, 90, 32, 0xb)
+	u.add(h, d.Controls, 1, "BUTTON", caption, width-266, height-78, 138, 32, 0xb)
+	u.add(h, d.Controls, 2, "BUTTON", "Отмена", width-114, height-78, 90, 32, 0xb)
+	if kind == "server" && !first {
+		for i, label := range []string{"Сервер", "Тема", "Автозапуск", "Администрирование"} {
+			u.add(h, d.Controls, 1100+i, "BUTTON", label, 10, 14+i*38, 144, 32, 0xb)
+		}
+		u.add(h, d.Controls, 1111, "STATIC", "Управление пользователями, сетями, компьютерами и подключениями.\n\nДля входа нужен токен сервера.", 172, 20, 310, 100, 0)
+		u.add(h, d.Controls, 1110, "BUTTON", "Открыть админ-панель", 172, 142, 310, 32, 0xb)
+		u.settingsPage(0)
+	}
 	u.themeWindow(h)
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)
@@ -1676,27 +1701,19 @@ func (u *ui) action(id int) {
 			set(u.controls[999], u.lastError)
 			return
 		}
-		serial := u.connectSerial
-		u.work("Ping", func(ctx context.Context) error {
-			result := peer.Name + " · " + peer.IP + "\n\n"
-			for i := 0; i < 3; i++ {
-				rtt, err := tunnel.PingIPv4(ctx, n.IP, peer.IP, 1500*time.Millisecond)
-				state := echoState{Measured: true, Reachable: err == nil, RTT: rtt}
-				if err == nil {
-					result += fmt.Sprintf("Ответ %d: %s\n", i+1, echoTime(rtt))
-				} else {
-					result += fmt.Sprintf("Запрос %d: %s\n", i+1, err.Error())
-				}
-				u.post(func() {
-					if serial == u.connectSerial {
-						u.echoes[peer.ID] = state
-						u.updateEcho(peer.ID)
-					}
-				})
-			}
-			u.post(func() { u.showMessage("Ping "+peer.IP, result) })
-			return nil
-		})
+		system, err := windows.GetSystemDirectory()
+		if err != nil {
+			u.showMessage("Пинг", err.Error())
+			return
+		}
+		cmd := exec.Command(filepath.Join(system, "ping.exe"), "-t", "-S", n.IP, peer.IP)
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x10}
+		if err := cmd.Start(); err != nil {
+			u.showMessage("Пинг", err.Error())
+		} else {
+			go cmd.Wait()
+		}
+
 	case 302:
 		if hasPeer {
 			fingerprint := sha256.Sum256([]byte(peer.PublicKey))
@@ -1737,6 +1754,18 @@ func (u *ui) action(id int) {
 			}
 			return e
 		})
+	case 108:
+		cfg := u.store.Snapshot()
+		address := strings.TrimRight(cfg.Server, "/")
+		address = strings.TrimSuffix(address, "/api") + "/api/admin"
+		if !strings.HasPrefix(address, "https://") && !strings.HasPrefix(address, "http://127.0.0.1:") {
+			u.showMessage("Админ-панель", "Укажите HTTPS-адрес сервера в настройках")
+			return
+		}
+		result, _, _ := windows.NewLazySystemDLL("shell32.dll").NewProc("ShellExecuteW").Call(u.window, uintptr(unsafe.Pointer(wide("open"))), uintptr(unsafe.Pointer(wide(address))), 0, 0, 1)
+		if result <= 32 {
+			u.showMessage("Админ-панель", "Не удалось открыть браузер")
+		}
 	case 105:
 		cfg := u.store.Snapshot()
 		if cfg.Server == "" {
