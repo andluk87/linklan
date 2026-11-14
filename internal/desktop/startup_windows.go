@@ -54,7 +54,10 @@ func taskExists(name string) (bool, error) {
 	if e != nil {
 		return false, e
 	}
-	data = schedulerXML(data)
+	data, e = schedulerXML(data)
+	if e != nil {
+		return false, e
+	}
 	data = bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
 	r := csv.NewReader(bytes.NewReader(data))
 	r.FieldsPerRecord = -1
@@ -72,18 +75,20 @@ func taskExists(name string) (bool, error) {
 	}
 	return false, nil
 }
-func schedulerXML(data []byte) []byte {
-	if len(data) >= 2 && (data[0] == 0xff && data[1] == 0xfe || data[1] == 0) {
-		if data[0] == 0xff {
-			data = data[2:]
+func schedulerXML(data []byte) ([]byte, error) {
+	return normalizeSchedulerOutput(data, func(raw []byte) ([]byte, error) {
+		// schtasks writes legacy text in the system OEM code page when stdout is piped.
+		n, e := windows.MultiByteToWideChar(1, 0, &raw[0], int32(len(raw)), nil, 0)
+		if e != nil {
+			return nil, e
 		}
-		words := make([]uint16, len(data)/2)
-		for i := range words {
-			words[i] = binary.LittleEndian.Uint16(data[i*2:])
+		words := make([]uint16, n)
+		_, e = windows.MultiByteToWideChar(1, 0, &raw[0], int32(len(raw)), &words[0], n)
+		if e != nil {
+			return nil, e
 		}
-		data = []byte(string(utf16.Decode(words)))
-	}
-	return bytes.ReplaceAll(data, []byte(`encoding="UTF-16"`), []byte(`encoding="UTF-8"`))
+		return []byte(string(utf16.Decode(words))), nil
+	})
 }
 
 var startupMu sync.Mutex
@@ -141,7 +146,11 @@ func configureAutostart(enable bool) error {
 			}
 			Settings struct{ Enabled string }
 		}
-		if e = xml.Unmarshal(schedulerXML(raw), &task); e != nil {
+		normalized, e := schedulerXML(raw)
+		if e != nil {
+			return e
+		}
+		if e = xml.Unmarshal(normalized, &task); e != nil {
 			return e
 		}
 		ownerSID := task.Principals.Principal.UserID

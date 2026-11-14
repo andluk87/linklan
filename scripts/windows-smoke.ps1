@@ -68,6 +68,8 @@ if($null -eq $icon){throw 'Explorer icon missing'}
 $icon.Dispose()
 # Prove the logon task is scoped to this user and stores no password.
 Run-Client @('--autostart','enable')
+# Re-read the existing task XML, as saving Settings does.
+Run-Client @('--autostart','enable')
 $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $taskName='LinkLAN-'+$sid
 $task=Get-ScheduledTask -TaskName $taskName
