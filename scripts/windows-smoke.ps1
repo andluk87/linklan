@@ -9,7 +9,7 @@ Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;using System.Runtime.InteropServices;
 public static class WindowCheck {
- [DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern IntPtr FindWindow(string cls,string title);
+ [DllImport("user32.dll",EntryPoint="FindWindowW",CharSet=CharSet.Unicode)]public static extern IntPtr FindWindow(IntPtr cls,string title);
  [DllImport("user32.dll")]public static extern bool IsWindowVisible(IntPtr hwnd);
  [DllImport("user32.dll")]public static extern bool PostMessage(IntPtr hwnd,uint msg,IntPtr w,IntPtr l);
 }
@@ -40,10 +40,21 @@ if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){throw 'A
 Run-Client @('--ui-check','--validation-dir',('"'+$validation+'"')) 180000
 $report=Get-Content (Join-Path $validation 'wpf-check.json') -Raw|ConvertFrom-Json
 if(-not $report.passed -or $report.cases.Count -ne 16){throw 'WPF layout matrix failed'}
-# Real DPAPI lifecycle and single-instance forwarding. Saved startup preference is disabled above.
+# Seed a prior-version DPAPI profile and verify identity/settings survive UI migration.
+Add-Type -AssemblyName System.Security
+$profile=Join-Path $env:APPDATA 'LinkLAN/profile.dpapi'
+$seed=@{DeviceName='Migrated PC';Theme='dark';Language='en';StartAtLogon=$false;StartInTray=$false;AutoConnect=$false;NetworkID='preserved-network';Profiles=@{'device|https://example.test/api'=@{device_id='preserved-device';private_key='fixture-private-key';refresh_token='fixture-refresh';peer_keys=@{peer='fixture-pin'}}};ExpandedNetworks=@{'preserved-network'=$false}}|ConvertTo-Json -Depth 8 -Compress
+$encrypted=[Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($seed),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+[IO.File]::WriteAllBytes($profile,$encrypted)
+function Read-Profile {[Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($profile),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))|ConvertFrom-Json}
+function Assert-Identity {param($Config)
+ $identity=$Config.Profiles.'device|https://example.test/api'
+ if($Config.DeviceName -ne 'Migrated PC' -or $Config.NetworkID -ne 'preserved-network' -or $identity.device_id -ne 'preserved-device' -or $identity.private_key -ne 'fixture-private-key' -or $identity.refresh_token -ne 'fixture-refresh' -or $identity.peer_keys.peer -ne 'fixture-pin' -or $Config.Theme -ne 'dark' -or $Config.Language -ne 'en'){throw 'UI migration altered identity or preferences'}
+}
+# Real DPAPI lifecycle and single-instance forwarding. Autostart is disabled in this fixture.
 $p=Start-Process $client -PassThru
 try {
- for($i=0;$i -lt 100;$i++){Start-Sleep -Milliseconds 100;$p.Refresh();if($p.HasExited){throw 'Normal frontend exited'};$h=[WindowCheck]::FindWindow($null,'LinkLAN');if($h -ne [IntPtr]::Zero){break}}
+ for($i=0;$i -lt 100;$i++){Start-Sleep -Milliseconds 100;$p.Refresh();if($p.HasExited){throw 'Normal frontend exited'};$h=[WindowCheck]::FindWindow([IntPtr]::Zero,'LinkLAN');if($h -ne [IntPtr]::Zero){break}}
  if($h -eq [IntPtr]::Zero){throw 'No WPF main window'}
  Run-Client @('--show')
  $workers=@(Get-CimInstance Win32_Process -Filter "Name='LinkLAN-engine.exe'");if($workers.Count -ne 1){throw 'Multiple engines for one user'}
@@ -56,7 +67,7 @@ try {
  if(Get-Process -Id $workerId -ErrorAction SilentlyContinue){throw 'Go engine survived frontend exit'}
 }finally{if(-not $p.HasExited){$p.Kill($true)}}
 $profile=Join-Path $env:APPDATA 'LinkLAN/profile.dpapi';if(-not(Test-Path $profile)){throw 'Existing DPAPI profile format not preserved'}
-$hash=(Get-FileHash $profile).Hash
+Assert-Identity (Read-Profile)
 # Uninstall removes only package-owned files, preserving unrelated files and DPAPI profile.
 Set-Content (Join-Path $installDir 'user-note.txt') 'keep'
 $p=Start-Process (Join-Path $installDir 'Uninstall.exe') -ArgumentList '/S' -PassThru
@@ -64,5 +75,5 @@ if(-not $p.WaitForExit(90000)-or $p.ExitCode -ne 0){throw 'Uninstaller failed'}
 Start-Sleep -Seconds 2
 if(Test-Path $client){throw 'Uninstall left frontend installed'}
 if(-not(Test-Path (Join-Path $installDir 'user-note.txt'))){throw 'Uninstall deleted unrelated user file'}
-if((Get-FileHash $profile).Hash -ne $hash){throw 'Uninstall altered device profile'}
+Assert-Identity (Read-Profile)
 @{passed=$true;version=$Version;selfContained=$true;wpfCases=$report.cases.Count;autostart=$true;singleInstance=$true;dpapiPreserved=$true;workerShutdown=$true}|ConvertTo-Json|Set-Content (Join-Path $validation 'windows-check.json')
