@@ -25,7 +25,7 @@
   "Автозагрузка": "Startup",
   "Автозагрузка: ": "Startup: ",
   "Автозапуск": "Startup",
-  "Автоматически": "Use Windows theme",
+  "Автоматически": "Automatic",
   "Админ-панель": "Admin panel",
   "Админ-панель сервера…": "Server admin panel…",
   "Администрирование": "Administration",
@@ -158,7 +158,7 @@
   "Создать приглашение": "Create invitation",
   "Создать сеть": "Create a network",
   "Создать сеть…    Insert": "Create a network…    Insert",
-  "Состояние сети": "Network status",
+  "Состояние сети": "Network state",
   "Сохранить": "Save",
   "Справка": "Help",
   "Статус подключения": "Connection status",
@@ -251,5 +251,9 @@
   "Статус": "Status",
   "Удалить сеть…": "Delete network…",
   "Удалённый рабочий стол": "Remote Desktop",
-  "Подсеть": "Subnet"
+  "Подсеть": "Subnet",
+  "Выберите язык": "Choose a language",
+  "Имя компьютера: 1–64 байта": "Computer name: 1–64 UTF-8 bytes",
+  "Роль": "Role",
+  "Администратор": "Administrator"
 }

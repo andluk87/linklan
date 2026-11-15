@@ -73,6 +73,9 @@ public sealed class MainVM : Observable
     public NodeVM? SelectedNode { get; set; }
     public event Action<string, bool>? ExpansionChanged;
     public event Action? CultureChanged;
+    bool renaming; string renameDraft = "";
+    public bool Renaming { get => renaming; set => Set(ref renaming, value); }
+    public string RenameDraft { get => renameDraft; set => Set(ref renameDraft, value); }
     public MainVM() { }
     public void RefreshAppearance() { foreach (var root in Networks) { root.Changed(nameof(NodeVM.Tip)); foreach (var peer in root.Children) { peer.Changed(nameof(NodeVM.Signal)); peer.Changed(nameof(NodeVM.Tip)); } } }
     public void ExpandedChanged(string id, bool value) { Expanded[id] = value; ExpansionChanged?.Invoke(id, value); }

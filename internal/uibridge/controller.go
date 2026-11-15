@@ -196,6 +196,30 @@ func (c *Controller) runOperation(f func(context.Context) error) error {
 	}
 	return e
 }
+
+// Rename updates the existing authenticated identity without replacing the API
+// instance or cancelling a running VPN session.
+func (c *Controller) rename(ctx context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if len(name) < 1 || len(name) > 64 || strings.ContainsAny(name, "|\r\n\x00") {
+		return fmt.Errorf("Имя компьютера: 1–64 байта, без управляющих символов")
+	}
+	c.mu.Lock()
+	a := c.api
+	c.mu.Unlock()
+	if a != nil {
+		if e := a.ConnectDevice(ctx, name); e != nil {
+			return e
+		}
+	}
+	if e := c.store.Update(func(cfg *tunnel.Config) { cfg.DeviceName = name }); e != nil {
+		return e
+	}
+	c.mu.Lock()
+	c.revision++
+	c.mu.Unlock()
+	return nil
+}
 func (c *Controller) attach(ctx context.Context, server, name string) error {
 	normalized, e := tunnel.NormalizeServer(server)
 	if e != nil {
@@ -515,6 +539,12 @@ func (c *Controller) Handle(method string, raw json.RawMessage) (any, error) {
 			return nil, e
 		}
 		if e := c.preferences(p); e != nil {
+			return nil, e
+		}
+		return c.State(), nil
+	case "rename":
+		e := c.runOperation(func(ctx context.Context) error { return c.rename(ctx, b.DeviceName) })
+		if e != nil {
 			return nil, e
 		}
 		return c.State(), nil

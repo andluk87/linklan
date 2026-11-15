@@ -30,6 +30,13 @@ public static class UiChecks
                 Assert(ips.Length > 0, "no IP cells rendered"); foreach (var ip in ips) { Assert(ip.Text.Count(c => c == '.') == 3, "invalid IP cell"); Assert(ip.ActualWidth <= 112.5, "IP escaped its reserved column"); }
                 var name = $"main-{theme}-{width}-{(int)(scale * 100)}"; Save(after, Path.Combine(path, name + ".png")); results.Add(new { name, passed = true, width, scale });
             }
+            ((FrameworkElement)shell.Window.Content).LayoutTransform = Transform.Identity;
+            shell.BeginRename(); await Layout(); Assert(shell.VM.Renaming && shell.Find<TextBox>("NameEditor").IsVisible, "inline editor did not open");
+            string originalName = shell.VM.ComputerName; shell.VM.RenameDraft = "discarded"; shell.CancelRename(); Assert(shell.VM.ComputerName == originalName && !shell.VM.Renaming, "Escape changed device name");
+            shell.BeginRename(); await Layout(); shell.VM.RenameDraft = ""; await shell.CommitRename(); Assert(shell.VM.Renaming && shell.VM.ComputerName == originalName, "empty name saved");
+            shell.VM.RenameDraft = "Renamed preview"; bool connectedBefore = shell.VM.Connected; await shell.CommitRename(); Assert(!shell.VM.Renaming && shell.VM.ComputerName == "Renamed preview" && shell.VM.Connected == connectedBefore, "rename interrupted connection");
+            shell.BeginRename(); await Layout(); Save(Capture(shell.Window), Path.Combine(path, "inline-rename.png")); shell.CancelRename();
+            var properties = Dialogs.PropertiesWindow(shell, first); properties.Show(); await Layout(); Assert(Descendants<GroupBox>(properties).Count() == 3, "properties sections missing"); Save(Capture(properties), Path.Combine(path, "properties.png")); properties.Close();
             foreach (MenuItem item in shell.Find<Menu>("TopMenu").Items) { item.IsSubmenuOpen = true; await Layout(); item.IsSubmenuOpen = false; }
             foreach (var node in new[] { shell.VM.Networks[0], first }) { var context = shell.Context(node); context.PlacementTarget = shell.Tree; context.IsOpen = true; await Layout(); Save(Capture(context), Path.Combine(path, node.IsNetwork ? "network-menu.png" : "peer-menu.png")); context.IsOpen = false; }
             var tooltip = new ToolTip { Content = first.Tip, PlacementTarget = shell.Tree, IsOpen = true }; await Layout(); Save(Capture(tooltip), Path.Combine(path, "tooltip.png")); tooltip.IsOpen = false;

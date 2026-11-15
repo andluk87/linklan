@@ -105,6 +105,18 @@ func TestUICommandsUseAuthenticatedAPIAndKeepSavedServerOnFailure(t *testing.T) 
 	if !c.State().APIReady || c.State().DeviceID != "device" || c.State().Connected {
 		t.Fatal("incorrect authenticated state")
 	}
+	beforeProfile := store.Snapshot().Profiles
+	beforeSerial := c.connectSerial
+	call("rename", map[string]string{"deviceName": "Renamed inline"})
+	if store.Snapshot().DeviceName != "Renamed inline" || c.connectSerial != beforeSerial || c.State().DeviceID != "device" {
+		t.Fatal("rename reset identity/session")
+	}
+	for key, p := range beforeProfile {
+		if store.Snapshot().Profiles[key].PrivateKey != p.PrivateKey {
+			t.Fatal("rename replaced private key")
+		}
+	}
+
 	call("create", map[string]string{"name": "Friends", "password": password, "confirm": password})
 	if c.State().Wanted || c.State().Connected {
 		t.Fatal("pending membership started VPN")
