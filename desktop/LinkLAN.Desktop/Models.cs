@@ -88,6 +88,7 @@ public sealed class MainVM : Observable
             for (int j = 0; j < n.Peers.Count; j++) { var p = n.Peers[j]; var child = node.Children.FirstOrDefault(v => v.Id == p.Id); if (child == null) { child = new(this, n, p); node.Children.Insert(j, child); } else { child.Update(n, p); int index = node.Children.IndexOf(child); if (index != j) node.Children.Move(index, j); } }
         }
         foreach (var name in new[] { nameof(Settings), nameof(ComputerName), nameof(OwnIp), nameof(Connected), nameof(Waiting), nameof(PowerText), nameof(Badge), nameof(EmptyMessage), nameof(Empty), nameof(State) }) Changed(name);
-        if (previousLanguage != L.Language) CultureChanged?.Invoke(); CommandManager.InvalidateRequerySuggested();
+        if (previousLanguage != L.Language) { RefreshAppearance(); CultureChanged?.Invoke(); }
+        CommandManager.InvalidateRequerySuggested();
     }
 }

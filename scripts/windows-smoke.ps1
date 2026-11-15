@@ -84,7 +84,9 @@ Assert-Identity (Read-Profile)
 Set-Content (Join-Path $installDir 'user-note.txt') 'keep'
 $p=Start-Process (Join-Path $installDir 'Uninstall.exe') -ArgumentList '/S' -PassThru
 if(-not $p.WaitForExit(90000)-or $p.ExitCode -ne 0){throw 'Uninstaller failed'}
-Start-Sleep -Seconds 2
+# NSIS starts a temporary uninstaller child; the launcher can exit first.
+$uninstallClock=[Diagnostics.Stopwatch]::StartNew()
+while((Test-Path $client) -and $uninstallClock.Elapsed.TotalSeconds -lt 60){Start-Sleep -Milliseconds 200}
 if(Test-Path $client){throw 'Uninstall left frontend installed'}
 if(-not(Test-Path (Join-Path $installDir 'user-note.txt'))){throw 'Uninstall deleted unrelated user file'}
 Assert-Identity (Read-Profile)
