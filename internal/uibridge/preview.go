@@ -26,6 +26,9 @@ func (c *Controller) preview() {
 		view := model.NetworkView{Network: n}
 		for j := 0; j < peers; j++ {
 			name := fmt.Sprintf("Компьютер-%03d · длинное имя", i*peers+j)
+			if c.opts.Large && i == 0 && (j == 1 || j == 2) {
+				name = "and-work"
+			}
 			if !c.opts.Large {
 				name = []string{"and-home", "and-work", "and-work", "ivan", "whatsapp", "BOOK-RAST"}[j]
 			}

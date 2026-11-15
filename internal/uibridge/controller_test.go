@@ -106,6 +106,9 @@ func TestStdioConcurrentFramesAndEOF(t *testing.T) {
 func TestPreviewPowerAndUnknownCommands(t *testing.T) {
 	c := New(fixtureStore(), Options{Preview: true, Large: true})
 	defer c.Close()
+	if c.State().Networks[0].Peers[1].Name != c.State().Networks[0].Peers[2].Name {
+		t.Fatal("duplicate-name regression fixture missing")
+	}
 	if len(c.State().Networks) != 50 {
 		t.Fatal("large preview missing")
 	}

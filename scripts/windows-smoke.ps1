@@ -14,7 +14,7 @@ public static class WindowCheck {
  [DllImport("user32.dll")]public static extern bool PostMessage(IntPtr hwnd,uint msg,IntPtr w,IntPtr l);
 }
 '@
-function Run-Client([string[]]$ClientArgs,[int]$Timeout=60000){$p=Start-Process $script:client -ArgumentList $ClientArgs -PassThru;if(-not $p.WaitForExit($Timeout)-or $p.ExitCode -ne 0){throw "Client command failed: $ClientArgs / $($p.ExitCode)"}}
+function Run-Client([string[]]$ClientArgs,[int]$Timeout=60000){$p=Start-Process $script:client -ArgumentList $ClientArgs -PassThru;if(-not $p.WaitForExit($Timeout)-or $p.ExitCode -ne 0){if(Test-Path (Join-Path $validation 'wpf-check.json')){Write-Host (Get-Content (Join-Path $validation 'wpf-check.json') -Raw)};throw "Client command failed: $ClientArgs / $($p.ExitCode)"}}
 $installer=Join-Path $PWD "artifacts/LinkLAN-Setup-x64-v$Version.exe"
 $p=Start-Process $installer -ArgumentList '/S' -PassThru
 if(-not $p.WaitForExit(90000)-or $p.ExitCode -ne 0){throw 'Installer failed'}

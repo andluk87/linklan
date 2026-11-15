@@ -3,6 +3,7 @@
 import argparse
 import sys
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -53,6 +54,16 @@ def build(output, wintun_archive=None, installer=False, installer_image=None):
                         '-p:EnableWindowsTargeting=true', f'-p:Version={version}',
                         f'-p:FileVersion={version}.0', f'-p:AssemblyVersion={version}.0',
                         '-o', str(bundle)], cwd=ROOT, check=True)
+        assets = json.loads((ROOT / 'desktop/LinkLAN.Desktop/obj/project.assets.json').read_text())
+        folders = [Path(p) for p in assets['packageFolders']]
+        dependencies = next(iter(assets['project']['frameworks'].values()))['downloadDependencies']
+        for package, documents in [('Microsoft.NETCore.App.Runtime.win-x64', ('LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT')),
+                                   ('Microsoft.WindowsDesktop.App.Runtime.win-x64', ('LICENSE',))]:
+            dependency = next(d for d in dependencies if d['name'] == package)
+            package_version = dependency['version'].strip('[]').split(',')[0].strip()
+            package_dir = next(p / package.lower() / package_version for p in folders if (p / package.lower() / package_version).is_dir())
+            for document in documents:
+                shutil.copy2(package_dir / document, bundle / (package.split('.')[1] + '-' + document + '.txt'))
         for source, target in [('docs/CLIENT.txt', 'README.txt'),
                                ('docs/THIRD_PARTY_NOTICES.txt', 'THIRD_PARTY_NOTICES.txt'),
                                ('scripts/Run-LinkLAN.cmd', 'Run-LinkLAN.cmd')]:
