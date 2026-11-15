@@ -44,6 +44,10 @@ func (u *ui) invalidateRow(item uintptr) {
 	}
 }
 func (u *ui) installHover() {
+	if u.hoverProc != 0 {
+		u.applyHoverHandles()
+		return
+	}
 	proc := windows.NewCallback(func(h uintptr, msg uint32, w, l, id, data uintptr) uintptr {
 		if msg == 0x200 {
 			if h == u.controls[3000] {
@@ -84,9 +88,12 @@ func (u *ui) installHover() {
 		return v
 	})
 	u.hoverProc = proc
+	u.applyHoverHandles()
+}
+func (u *ui) applyHoverHandles() {
 	for _, id := range []int{100, 500, 501, 502, 510, 511, 3000} {
 		if h := u.controls[id]; h != 0 {
-			commonControls.NewProc("SetWindowSubclass").Call(h, proc, 1, 0)
+			commonControls.NewProc("SetWindowSubclass").Call(h, u.hoverProc, 1, 0)
 		}
 	}
 }

@@ -12,6 +12,7 @@ public static class LinkLANWindow {
  [StructLayout(LayoutKind.Sequential)] public struct IconID { public uint Size; public IntPtr Window; public uint ID; public Guid Guid; }
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls,string title);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr GetProp(IntPtr h,string name);
+ [DllImport("user32.dll",EntryPoint="FindWindowW",CharSet=CharSet.Unicode)] public static extern IntPtr FindWindowByClass(string cls,IntPtr title);
  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out Rect r);
  [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
@@ -137,7 +138,7 @@ foreach($dpi in @(96,120,144,192)) {
   foreach($width in @(250,300,440,600)){Assert-CompactLayout $h $dpi $width}
   if($dpi -eq 96) {
    $null=[LinkLANWindow]::SendMessage($h,0x111,[UIntPtr]101,[IntPtr]::Zero)
-   $settings=[LinkLANWindow]::FindWindow('LinkLANDialogV2',$null)
+   $settings=[LinkLANWindow]::FindWindowByClass('LinkLANDialogV2',[IntPtr]::Zero)
    if($settings -eq [IntPtr]::Zero){throw 'Settings dialog did not open'}
    foreach($page in 0..5) {
     $null=[LinkLANWindow]::SendMessage($settings,0x111,[UIntPtr](1100+$page),[IntPtr]::Zero)
@@ -189,7 +190,7 @@ try {
   $null=[LinkLANWindow]::SendMessage($h,0x232,[UIntPtr]::Zero,[IntPtr]::Zero)
   Start-Sleep -Milliseconds 1000
   $null=[LinkLANWindow]::SendMessage($h,0x111,[UIntPtr]101,[IntPtr]::Zero)
-  $settings=[LinkLANWindow]::FindWindow('LinkLANDialogV2',$null)
+  $settings=[LinkLANWindow]::FindWindowByClass('LinkLANDialogV2',[IntPtr]::Zero)
   if($settings -eq [IntPtr]::Zero){throw 'Production settings did not open'}
   foreach($command in @(1100,1202,1101,1211,1102,1042,1103,1220,1221,1222)){$null=[LinkLANWindow]::SendMessage($settings,0x111,[UIntPtr]$command,[IntPtr]::Zero)}
   $null=[LinkLANWindow]::SendMessage($settings,0x111,[UIntPtr]2,[IntPtr]::Zero)
