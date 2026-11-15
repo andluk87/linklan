@@ -16,9 +16,11 @@ import (
 	"linklan/internal/desktop"
 	"linklan/internal/model"
 	"linklan/internal/tunnel"
+	"linklan/internal/uibridge"
 )
 
 func main() {
+	bridge := flag.Bool("ui-bridge", false, "Internal WPF parent/child transport")
 	startHidden := flag.Bool("start-hidden", false, "Start in the notification area")
 	quit := flag.Bool("quit", false, "Close an existing LinkLAN instance")
 	autostart := flag.String("autostart", "", "Manage startup: enable, disable or status")
@@ -48,6 +50,36 @@ func main() {
 			os.Exit(1)
 		}
 		if _, e = cipher.NewGCM(block); e != nil {
+			os.Exit(1)
+		}
+		return
+	}
+	if *bridge {
+		var store *tunnel.Store
+		if *preview || *largePreview {
+			store = &tunnel.Store{Data: tunnel.Config{Theme: *previewTheme, Language: *previewLanguage, DeviceName: "DESKTOP-8QR3913", Profiles: map[string]tunnel.Profile{}}}
+		} else {
+			admin, err := desktop.EnsureAdmin()
+			if err != nil || !admin {
+				os.Exit(1)
+			}
+			store, err = tunnel.LoadStore()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			store.Update(func(c *tunnel.Config) { c.AllowHTTP = *allowHTTP })
+			root, _ := os.UserConfigDir()
+			dir := filepath.Join(root, "LinkLAN")
+			os.MkdirAll(dir, 0700)
+			if logFile, e := os.OpenFile(filepath.Join(dir, "client.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600); e == nil {
+				defer logFile.Close()
+				slog.SetDefault(slog.New(slog.NewJSONHandler(logFile, nil)))
+				debug.SetCrashOutput(logFile, debug.CrashOptions{})
+			}
+		}
+		if err := uibridge.Serve(store, uibridge.Options{Preview: *preview || *largePreview, Large: *largePreview}, os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		return

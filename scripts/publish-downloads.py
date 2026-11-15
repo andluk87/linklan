@@ -25,13 +25,12 @@ def publish(root):
     installer = releases / f'LinkLAN-Setup-x64-v{version}.exe'
     if installer.exists():
         shutil.copy2(installer, downloads / installer.name)
-    with zipfile.ZipFile(bundle) as archive:
-        (downloads / 'LinkLAN.exe').write_bytes(archive.read('LinkLAN.exe'))
+    # The WPF frontend requires its bundled runtime: offer complete, versioned packages.
     source = downloads / f'LinkLAN-source-v{version}.zip'
     with zipfile.ZipFile(source, 'w', zipfile.ZIP_DEFLATED) as archive:
         for item in sorted(root.rglob('*')):
             rel = item.relative_to(root)
-            if not item.is_file() or any(part in ('.git', '.secrets', 'releases', 'downloads', '__pycache__', 'artifacts', 'backups', 'certs') for part in rel.parts):
+            if not item.is_file() or any(part in ('.git', '.secrets', 'releases', 'downloads', '__pycache__', 'artifacts', 'backups', 'certs', 'bin', 'obj') for part in rel.parts):
                 continue
             if (item.name.startswith('.env') and item.name != '.env.example') or item.suffix.lower() in ('.key', '.pfx', '.p12', '.pem', '.dpapi', '.exe', '.syso'):
                 continue

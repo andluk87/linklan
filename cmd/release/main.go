@@ -12,8 +12,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"linklan/internal/model"
@@ -75,8 +77,34 @@ func main() {
 	out, e := os.Create(path)
 	fail(e)
 	writer := zip.NewWriter(out)
-	for _, name := range []string{"LinkLAN.exe", "wintun.dll", "WINTUN-LICENSE.txt", "README.txt", "Run-LinkLAN.cmd", "THIRD_PARTY_NOTICES.txt"} {
-		in, e := os.Open(filepath.Join(*bundle, name))
+	for _, required := range []string{"LinkLAN.exe", "LinkLAN-engine.exe", "LinkLAN.dll", "LinkLAN.runtimeconfig.json", "wintun.dll", "WINTUN-LICENSE.txt", "README.txt", "THIRD_PARTY_NOTICES.txt"} {
+		info, err := os.Stat(filepath.Join(*bundle, required))
+		fail(err)
+		if !info.Mode().IsRegular() {
+			fail(fmt.Errorf("invalid bundle file %s", required))
+		}
+	}
+	var files []string
+	fail(filepath.WalkDir(*bundle, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("bundle contains non-regular file: %s", entry.Name())
+		}
+		rel, err := filepath.Rel(*bundle, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(rel))
+		return nil
+	}))
+	sort.Strings(files)
+	for _, name := range files {
+		in, e := os.Open(filepath.Join(*bundle, filepath.FromSlash(name)))
 		fail(e)
 		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
 		header.SetMode(0644)

@@ -14,7 +14,7 @@ temporary = output.with_suffix('.zip.partial')
 # Match exact paths at project root. In particular, vendor/**/compose.go
 # is a Go dependency and must never be treated as a Docker Compose file.
 preserved = {'.env', 'compose.yml', 'compose.caddy.yml', 'compose.tls.yml', 'compose.test.yml', 'compose.api.yml'}
-selected = [f'LinkLAN-Windows-x64-v{version}.zip', 'LinkLAN.exe', 'latest.json', source.name]
+selected = [f'LinkLAN-Windows-x64-v{version}.zip', 'latest.json', source.name]
 expected = set()
 try:
     with zipfile.ZipFile(source) as src, zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as dst:

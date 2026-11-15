@@ -18,3 +18,7 @@ backups/
 *.p12
 
 .secrets/
+
+# .NET build outputs
+**/bin/
+**/obj/

@@ -32,14 +32,15 @@ class PublishTests(unittest.TestCase):
 
     def test_publishes_current_binary_and_preserves_source_config(self):
         for name in ['.env', '.env.production', 'publisher.key', 'private.pem', 'profile.dpapi',
-                     '.secrets/admin-token', 'deploy/certs/server.key', 'backups/private.txt', 'compose.yml', '.env.example', 'main.go']:
+                     'desktop/LinkLAN.Desktop/bin/Release/LinkLAN.dll', 'desktop/LinkLAN.Desktop/obj/project.assets.json', '.secrets/admin-token', 'deploy/certs/server.key', 'backups/private.txt', 'compose.yml', '.env.example', 'main.go']:
             p = self.root / name
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(name)
         publisher.publish(self.root)
         publisher.publish(self.root)
         downloads = self.root / 'web' / 'downloads'
-        self.assertEqual((downloads / 'LinkLAN.exe').read_bytes(), b'new-client')
+        self.assertEqual((downloads / self.name).read_bytes(), self.bundle.read_bytes())
+        self.assertFalse((downloads / 'LinkLAN.exe').exists())
         with zipfile.ZipFile(downloads / 'LinkLAN-source-v1.2.3.zip') as z:
             self.assertEqual(set(z.namelist()), {'LinkLAN/release-version', 'LinkLAN/compose.yml',
                                                'LinkLAN/.env.example', 'LinkLAN/main.go'})

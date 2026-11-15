@@ -128,6 +128,12 @@ func configureAutostart(enable bool) error {
 	if e != nil {
 		return e
 	}
+	if strings.EqualFold(filepath.Base(exe), "LinkLAN-engine.exe") {
+		exe = filepath.Join(filepath.Dir(exe), "LinkLAN.exe")
+		if info, err := os.Stat(exe); err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("LinkLAN frontend is missing beside the engine")
+		}
+	}
 	if exists {
 		raw, e := scheduler("/Query", "/TN", name, "/XML")
 		if e != nil {

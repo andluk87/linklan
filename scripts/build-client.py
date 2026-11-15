@@ -46,8 +46,13 @@ def build(output, wintun_archive=None, installer=False, installer_image=None):
         windows_env = dict(env, GOOS='windows', GOARCH='amd64')
         flags = f'-H=windowsgui -s -w -X linklan/internal/model.Version={version}'
         subprocess.run(['go', 'build', '-mod=vendor', '-buildvcs=false', '-trimpath',
-                        f'-ldflags={flags}', '-o', str(bundle / 'LinkLAN.exe'), './cmd/client'],
+                        f'-ldflags={flags}', '-o', str(bundle / 'LinkLAN-engine.exe'), './cmd/client'],
                        cwd=ROOT, env=windows_env, check=True)
+        subprocess.run(['dotnet', 'publish', str(ROOT / 'desktop/LinkLAN.Desktop'),
+                        '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
+                        '-p:EnableWindowsTargeting=true', f'-p:Version={version}',
+                        f'-p:FileVersion={version}.0', f'-p:AssemblyVersion={version}.0',
+                        '-o', str(bundle)], cwd=ROOT, check=True)
         for source, target in [('docs/CLIENT.txt', 'README.txt'),
                                ('docs/THIRD_PARTY_NOTICES.txt', 'THIRD_PARTY_NOTICES.txt'),
                                ('scripts/Run-LinkLAN.cmd', 'Run-LinkLAN.cmd')]:
@@ -56,7 +61,17 @@ def build(output, wintun_archive=None, installer=False, installer_image=None):
                         '-bundle', str(bundle), '-output', str(output), '-version', version],
                        cwd=ROOT, env=dict(env, GOOS='', GOARCH=''), check=True)
         if installer or installer_image:
-            command = ['makensis', f'-DVERSION={version}', f'-DBUNDLE={bundle}',
+            uninstall = tmp / 'uninstall-files.nsh'
+            files = sorted(p.relative_to(bundle) for p in bundle.rglob('*') if p.is_file())
+            directories = sorted((p.relative_to(bundle) for p in bundle.rglob('*') if p.is_dir()), key=lambda p: len(p.parts), reverse=True)
+            def nsis_path(path):
+                value = str(path).replace('/', '\\')
+                if any(c in value for c in ('$', '"', '\n', '\r')):
+                    raise ValueError('Unsafe bundle path for installer')
+                return value
+            uninstall.write_text(''.join(f'Delete "$INSTDIR\\{nsis_path(p)}"\n' for p in files)
+                                 + ''.join(f'RMDir "$INSTDIR\\{nsis_path(p)}"\n' for p in directories))
+            command = ['makensis', f'-DVERSION={version}', f'-DBUNDLE={bundle}', f'-DUNINSTALL_MANIFEST={uninstall}',
                        f'-DOUTPUT={output / ("LinkLAN-Setup-x64-v" + version + ".exe")}',
                        str(ROOT / 'scripts/installer.nsi')]
             if installer_image:
@@ -65,7 +80,7 @@ def build(output, wintun_archive=None, installer=False, installer_image=None):
                 command = ['docker', 'run', '--rm', '--network', 'none',
                            '--user', f'{os.getuid()}:{os.getgid()}',
                            '--mount', f'type=bind,src={ROOT},dst={ROOT},readonly',
-                           '--mount', f'type=bind,src={bundle},dst={bundle},readonly',
+                           '--mount', f'type=bind,src={tmp},dst={tmp},readonly',
                            '--mount', f'type=bind,src={output},dst={output}',
                            '--workdir', str(ROOT), installer_image] + command
             subprocess.run(command, cwd=ROOT, check=True)

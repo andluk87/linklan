@@ -41,6 +41,7 @@ type Config struct {
 	AutoConnect                              bool
 	StartAtLogon                             *bool
 	Window                                   WindowState
+	WindowDIP                                bool
 	ExpandedNetworks                         map[string]bool
 	FirewallAllowed                          bool
 	NetworkID                                string

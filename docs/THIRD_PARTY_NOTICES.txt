@@ -646,3 +646,8 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+.NET 10 / WPF runtime: Microsoft and .NET Foundation contributors.
+MIT license: https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
+Runtime third-party notices are included with the self-contained distribution.
+WPF: https://github.com/dotnet/wpf/blob/main/LICENSE.TXT

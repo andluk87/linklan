@@ -16,3 +16,6 @@ artifacts
 *.dpapi
 
 .secrets
+
+**/bin
+**/obj
