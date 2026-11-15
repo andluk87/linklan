@@ -33,16 +33,19 @@ type WindowState struct {
 }
 
 type Config struct {
-	Server, Email, DeviceName string
-	Theme                     string
-	AutoConnect               bool
-	StartAtLogon              *bool
-	Window                    WindowState
-	ExpandedNetworks          map[string]bool
-	FirewallAllowed           bool
-	NetworkID                 string
-	AllowHTTP                 bool `json:"-"`
-	Profiles                  map[string]Profile
+	Server, Email, DeviceName                string
+	Theme                                    string
+	Language                                 string
+	StartInTray                              *bool
+	NotifyDesktop, NotifySound, RespectFocus *bool
+	AutoConnect                              bool
+	StartAtLogon                             *bool
+	Window                                   WindowState
+	ExpandedNetworks                         map[string]bool
+	FirewallAllowed                          bool
+	NetworkID                                string
+	AllowHTTP                                bool `json:"-"`
+	Profiles                                 map[string]Profile
 }
 type Store struct {
 	mu   sync.Mutex

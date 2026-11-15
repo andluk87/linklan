@@ -89,14 +89,14 @@ func (u *ui) echo(peerID, networkID string) echoState {
 }
 func echoTime(rtt time.Duration) string {
 	if rtt < time.Millisecond {
-		return "<1 мс"
+		return tr("<1 мс")
 	}
-	return fmt.Sprintf("%d мс", rtt.Milliseconds())
+	return fmt.Sprintf(tr("%d мс"), rtt.Milliseconds())
 }
 func (u *ui) peerLine(peer model.Peer, networkID string) string {
 	line := shortName(peer.Name, 16)
 	if peer.Status == "pending" {
-		return line + "  ·  ожидает принятия"
+		return line + tr("  ·  ожидает принятия")
 	}
 	if peer.IP != "" {
 		line += "  ·  " + peer.IP
@@ -214,8 +214,8 @@ func (u *ui) requestFirewall(force bool, next func()) {
 	}
 	allowed := u.store.Snapshot().FirewallAllowed
 	if !allowed || force {
-		body := "Разрешить LinkLAN доступ через брандмауэр Windows?\n\nБудут разрешены входящие и исходящие подключения LinkLAN, а также ICMP, TCP и UDP для игр и сервисов внутри виртуальной сети.\n\nРазрешение будет сохранено для следующих запусков."
-		if call("MessageBoxW", u.window, uintptr(unsafe.Pointer(wide(body))), uintptr(unsafe.Pointer(wide("LinkLAN — брандмауэр"))), 0x124) != 6 {
+		body := tr("Разрешить LinkLAN доступ через брандмауэр Windows?\n\nБудут разрешены входящие и исходящие подключения LinkLAN, а также ICMP, TCP и UDP для игр и сервисов внутри виртуальной сети.\n\nРазрешение будет сохранено для следующих запусков.")
+		if call("MessageBoxW", u.window, uintptr(unsafe.Pointer(wide(body))), uintptr(unsafe.Pointer(wide(tr("LinkLAN — брандмауэр")))), 0x124) != 6 {
 			if !force && next != nil {
 				next()
 			}
@@ -223,7 +223,7 @@ func (u *ui) requestFirewall(force bool, next func()) {
 		}
 	}
 	u.busy = true
-	set(u.controls[999], "Настройка доступа через брандмауэр…")
+	set(u.controls[999], tr("Настройка доступа через брандмауэр…"))
 	go func() {
 		ctx, cancel := context.WithTimeout(u.ctx, 30*time.Second)
 		defer cancel()
@@ -235,9 +235,9 @@ func (u *ui) requestFirewall(force bool, next func()) {
 			u.busy = false
 			if err != nil {
 				set(u.controls[999], err.Error())
-				notice(u.window, "Брандмауэр", err.Error())
+				notice(u.window, tr("Брандмауэр"), err.Error())
 			} else {
-				set(u.controls[999], "Доступ через брандмауэр разрешён")
+				set(u.controls[999], tr("Доступ через брандмауэр разрешён"))
 			}
 			if next != nil && (!force || err == nil) {
 				next()

@@ -70,16 +70,16 @@ func QuitExisting() error {
 			return err
 		}
 		if status != windows.WAIT_OBJECT_0 {
-			return fmt.Errorf("LinkLAN ещё отключает VPN; дождитесь завершения и повторите")
+			return fmt.Errorf(tr("LinkLAN ещё отключает VPN; дождитесь завершения и повторите"))
 		}
 
 	}
-	return fmt.Errorf("Обнаружено несколько запущенных экземпляров LinkLAN")
+	return fmt.Errorf(tr("Обнаружено несколько запущенных экземпляров LinkLAN"))
 }
 func (u *ui) trayData() notifyIconData {
 	n := notifyIconData{Window: u.window, ID: 1, Flags: 1 | 2 | 4, Callback: trayCallback, Icon: u.smallIcon}
 	n.Size = uint32(unsafe.Sizeof(n))
-	label, _ := connectionBadge(u.engine != nil, u.wanted, u.lastError != "")
+	label, _ := u.badge()
 	tip := "LinkLAN · " + label
 	if u.lastError != "" {
 		tip += " · " + u.lastError
@@ -136,15 +136,15 @@ func (u *ui) trayMenu() {
 	call("GetCursorPos", uintptr(unsafe.Pointer(&p)))
 	menu := u.newMenu()
 	defer call("DestroyMenu", menu)
-	u.menuItem(menu, 520, "Открыть LinkLAN")
+	u.menuItem(menu, 520, tr("Открыть LinkLAN"))
 	if u.wanted {
-		u.menuItem(menu, 205, "Отключить VPN")
+		u.menuItem(menu, 205, tr("Отключить VPN"))
 	} else {
-		u.menuItem(menu, 100, "Подключить VPN")
+		u.menuItem(menu, 100, tr("Подключить VPN"))
 	}
-	u.menuItem(menu, 101, "Настройки…")
+	u.menuItem(menu, 101, tr("Настройки…"))
 	u.menuSeparator(menu)
-	u.menuItem(menu, 106, "Выход")
+	u.menuItem(menu, 106, tr("Выход"))
 	call("SetForegroundWindow", u.window)
 	selected := call("TrackPopupMenu", menu, 0x102, uintptr(p.X), uintptr(p.Y), 0, u.window, 0)
 	if selected != 0 {

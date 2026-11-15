@@ -49,16 +49,17 @@ func TestScheduledStartupIsBoundToInteractiveUserAndEscapesPaths(t *testing.T) {
 }
 func TestCompactLayoutScalesWithoutLosingIPColumn(t *testing.T) {
 	for _, dpi := range []int{96, 120, 144, 192} {
-		width := scalePixel(compactTheme.MinWidth, dpi)
-		right := width - scalePixel(2*compactTheme.Padding+17, dpi)
-		split := right - scalePixel(116, dpi)
-		if split-scalePixel(38, dpi) < scalePixel(100, dpi) {
-			t.Fatalf("name column too narrow at %d", dpi)
-		}
-		if got := logicalPixel(scalePixel(680, dpi), dpi); got != 680 {
-			t.Fatal("geometry drifts", dpi, got)
+		for _, width := range []int{250, 300, 440, 600} {
+			left, right := peerColumns(scalePixel(width-20, dpi), dpi)
+			if right-left != scalePixel(112, dpi) {
+				t.Fatal("IP reservation changed", dpi, width)
+			}
+			if left-scalePixel(42, dpi) < scalePixel(24, dpi) {
+				t.Fatal("name column too narrow", dpi, width)
+			}
 		}
 	}
+
 }
 func TestLiveSessionRefreshDoesNotRebuildUnchangedNetworkRows(t *testing.T) {
 	a := []model.NetworkView{{Network: model.Network{ID: "n", Name: "Network"}, Peers: []model.Peer{{ID: "p", Name: "PC", Online: true}}}}
@@ -69,15 +70,20 @@ func TestLiveSessionRefreshDoesNotRebuildUnchangedNetworkRows(t *testing.T) {
 		t.Fatal("session heartbeat must not rebuild rows")
 	}
 	b[0].Peers[0].IP = "26.0.0.2"
+	b[0].Peers[0].Online = false
+	if !sameNetworkLayout(a, b) {
+		t.Fatal("IP/presence updates must update existing rows")
+	}
+	b[0].Peers = append(b[0].Peers, model.Peer{ID: "new"})
 	if sameNetworkLayout(a, b) {
-		t.Fatal("IP change must redraw the row")
+		t.Fatal("new participant needs a structural update")
 	}
 }
 func TestBadgeAndSignalNeverInventAConnection(t *testing.T) {
 	if label, _ := connectionBadge(false, false, false); label != "Не в сети" {
 		t.Fatal(label)
 	}
-	if label, _ := connectionBadge(false, true, true); label != "Ошибка" {
+	if label, _ := connectionBadge(false, true, true); label != "Ошибка подключения" {
 		t.Fatal(label)
 	}
 	if label, _ := connectionBadge(true, true, false); label != "В сети" {

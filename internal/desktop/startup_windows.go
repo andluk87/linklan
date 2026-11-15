@@ -43,9 +43,9 @@ func scheduler(args ...string) ([]byte, error) {
 	out, e := cmd.Output()
 	if e != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("Планировщик заданий Windows не ответил вовремя")
+			return nil, fmt.Errorf(tr("Планировщик заданий Windows не ответил вовремя"))
 		}
-		return nil, fmt.Errorf("Планировщик заданий Windows: %w", e)
+		return nil, fmt.Errorf(tr("Планировщик заданий Windows: %w"), e)
 	}
 	return out, nil
 }
@@ -160,7 +160,7 @@ func configureAutostart(enable bool) error {
 			}
 		}
 		if !strings.HasPrefix(task.RegistrationInfo.Description, "LinkLAN:") || ownerSID != sid {
-			return fmt.Errorf("Задание %s не принадлежит конфигурации LinkLAN; оно не изменено", name)
+			return fmt.Errorf(tr("Задание %s не принадлежит конфигурации LinkLAN; оно не изменено"), name)
 		}
 		if strings.EqualFold(filepath.Clean(task.Actions.Exec.Command), filepath.Clean(exe)) && task.Actions.Exec.Arguments == "--start-hidden" && task.Principals.Principal.RunLevel == "HighestAvailable" && task.Principals.Principal.LogonType == "InteractiveToken" && task.Settings.Enabled != "false" {
 			return nil

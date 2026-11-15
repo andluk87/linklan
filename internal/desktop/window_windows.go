@@ -13,13 +13,14 @@ func (u *ui) makeFont(height, weight int) uintptr {
 	return f
 }
 func (u *ui) refreshFonts() {
-	old := []uintptr{u.font, u.boldFont, u.networkFont, u.smallFont, u.ipFont, u.menuFont}
+	old := []uintptr{u.font, u.boldFont, u.networkFont, u.smallFont, u.ipFont, u.menuFont, u.tinyFont}
 	u.font = u.makeFont(13, 400)
 	u.boldFont = u.makeFont(16, 600)
 	u.networkFont = u.makeFont(13, 600)
 	u.smallFont = u.makeFont(12, 400)
-	u.ipFont = u.makeFont(14, 600)
+	u.ipFont = u.makeFont(13, 600)
 	u.menuFont = u.makeFont(12, 400)
+	u.tinyFont = u.makeFont(10, 400)
 	for id, h := range u.controls {
 		font := u.font
 		if id == 1004 {
@@ -110,7 +111,7 @@ func (u *ui) saveWindowState() {
 		c.ExpandedNetworks = expanded
 	})
 	if e != nil {
-		u.lastError = "Не удалось сохранить расположение окна: " + e.Error()
+		u.lastError = tr("Не удалось сохранить расположение окна: ") + e.Error()
 	}
 }
 func (u *ui) scheduleWindowSave() {
@@ -130,7 +131,7 @@ func (u *ui) startAutoloadSync() {
 		err := ApplyAutostart(u.store, enable)
 		u.post(func() {
 			if err != nil {
-				u.lastError = "Автозагрузка: " + err.Error()
+				u.lastError = tr("Автозагрузка: ") + err.Error()
 			}
 			u.header()
 		})

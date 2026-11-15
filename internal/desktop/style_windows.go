@@ -14,16 +14,20 @@ import (
 )
 
 func (u *ui) label(dc uintptr, value string, r rect, font uintptr, color uint32, flags uintptr) {
+	if flags&0x10 == 0 {
+		flags |= 0x20
+	}
 	old, _, _ := gdi.NewProc("SelectObject").Call(dc, font)
 	gdi.NewProc("SetBkMode").Call(dc, 1)
 	gdi.NewProc("SetTextColor").Call(dc, uintptr(color))
-	call("DrawTextW", dc, uintptr(unsafe.Pointer(wide(value))), ^uintptr(0), uintptr(unsafe.Pointer(&r)), flags|0x800|0x20)
+	call("DrawTextW", dc, uintptr(unsafe.Pointer(wide(value))), ^uintptr(0), uintptr(unsafe.Pointer(&r)), flags|0x800)
 	gdi.NewProc("SelectObject").Call(dc, old)
 }
 func (u *ui) paintChrome(dc uintptr, r rect) {
 	title := rect{0, 0, r.Right, int32(u.s(compactTheme.Title))}
 	call("FillRect", dc, uintptr(unsafe.Pointer(&title)), u.panelBrush)
-	x := int(r.Right)/2 - u.s(56)
+	x := min((int(r.Right)-u.s(120))/2, int(r.Right)-u.s(180))
+	x = max(u.s(12), x)
 	if u.smallIcon != 0 {
 		call("DrawIconEx", dc, uintptr(x), uintptr(u.s(4)), u.smallIcon, uintptr(u.s(24)), uintptr(u.s(24)), 0, 0, 3)
 	}
@@ -62,10 +66,13 @@ func (u *ui) drawPower(d *drawItem) {
 							if u.hotButton == d.Window {
 								highlight += 8
 							}
-							if u.wanted {
+							if d.State&1 != 0 && highlight > 8 {
+								highlight -= 8
+							}
+							if u.engine != nil || (u.preview && u.wanted) {
 								c = rgb(19+highlight, 155+highlight, 177+highlight)
 							} else {
-								c = rgb(176+highlight, 79+highlight, 51+highlight)
+								c = rgb(115+highlight, 139+highlight, 150+highlight)
 							}
 						}
 					}
@@ -91,8 +98,18 @@ func (u *ui) drawPower(d *drawItem) {
 	bottom.Top += int32(u.s(35))
 	bottom.Bottom -= int32(u.s(7))
 	state := "OFF"
-	if u.wanted {
+	if u.engine != nil || (u.preview && u.wanted) {
 		state = "ON"
+	}
+	if (u.wanted || u.busy && u.api == nil) && u.engine == nil && !u.preview {
+		angle := float64(u.animation) * math.Pi / 6
+		dot := rect{int32(float64(w)/2+math.Cos(angle)*float64(u.s(25))) - int32(u.s(2)), int32(float64(h)/2+math.Sin(angle)*float64(u.s(25))) - int32(u.s(2)), 0, 0}
+		dot.Right = dot.Left + int32(u.s(4))
+		dot.Bottom = dot.Top + int32(u.s(4))
+		b := brush(u.palette.Accent)
+		u.roundedRadius(d.DC, dot, b, 2)
+		gdi.NewProc("DeleteObject").Call(b)
+		state = "…"
 	}
 	u.label(d.DC, state, bottom, u.smallFont, rgb(255, 255, 255), 1|4)
 }
@@ -169,21 +186,36 @@ func (u *ui) drawTreeRow(d *customDraw) {
 			bottom.Top = card.Top + int32(u.s(6))
 			call("FillRect", d.DC, uintptr(unsafe.Pointer(&bottom)), u.panelBrush)
 		}
+		selected := send(u.controls[3000], 0x110a, 9, 0) == d.Item
+		if selected || u.hovered == d.Item {
+			color := u.palette.Hover
+			if selected {
+				color = u.palette.Selection
+				if !u.active {
+					color = u.palette.Inactive
+				}
+			}
+			b := brush(color)
+			sr := r
+			sr.Top += int32(u.s(4))
+			u.roundedRadius(d.DC, sr, b, 6)
+			gdi.NewProc("DeleteObject").Call(b)
+		}
 		arrow := "▸"
 		if open {
 			arrow = "▾"
 		}
-		tr := r
-		tr.Top += int32(u.s(3))
-		u.label(d.DC, arrow, rect{int32(u.s(7)), tr.Top, int32(u.s(23)), tr.Bottom}, u.menuFont, u.palette.Text, 4)
+		headerRect := r
+		headerRect.Top += int32(u.s(3))
+		u.label(d.DC, arrow, rect{int32(u.s(7)), headerRect.Top, int32(u.s(23)), headerRect.Bottom}, u.menuFont, u.palette.Text, 4)
 		n, _ := u.network(entry.NetworkID)
 		name := n.Name
 		if n.Blocked {
-			name += " · заблокирована"
+			name += tr(" · заблокирована")
 		} else if n.Status == "pending" {
-			name += " · заявка"
+			name += tr(" · заявка")
 		}
-		u.label(d.DC, name, rect{int32(u.s(27)), tr.Top, r.Right - int32(u.s(10)), tr.Bottom}, u.networkFont, u.palette.Text, 4|0x8000)
+		u.label(d.DC, name, rect{int32(u.s(27)), headerRect.Top, r.Right - int32(u.s(10)), headerRect.Bottom}, u.networkFont, u.palette.Text, 4|0x8000)
 		return
 	}
 	if send(u.controls[3000], 0x110a, 1, d.Item) == 0 {
@@ -196,9 +228,12 @@ func (u *ui) drawTreeRow(d *customDraw) {
 	}
 	selected := send(u.controls[3000], 0x110a, 9, 0) == d.Item
 	if selected || u.hovered == d.Item {
-		color := compactColors.Hover
+		color := u.palette.Hover
 		if selected {
-			color = compactColors.Selection
+			color = u.palette.Selection
+			if !u.active {
+				color = u.palette.Inactive
+			}
 		}
 		b := brush(color)
 		sr := r
@@ -219,7 +254,7 @@ func (u *ui) drawTreeRow(d *customDraw) {
 		image = 0
 	}
 	for bar := 0; bar < 4; bar++ {
-		color := u.palette.Muted
+		color := u.palette.Offline
 		if image >= 2 && bar < int(image)-1 {
 			color = u.palette.Online
 			if image == 3 {
@@ -230,7 +265,7 @@ func (u *ui) drawTreeRow(d *customDraw) {
 		}
 
 		if image < 2 && bar > 0 {
-			color = u.palette.Field
+			color = u.palette.Offline
 		}
 		bottom := r.Top + (r.Bottom-r.Top)/2 + int32(u.s(6))
 		br := rect{int32(u.s(14 + bar*4)), bottom - int32(u.s(3+bar*3)), int32(u.s(17 + bar*4)), bottom}
@@ -238,24 +273,23 @@ func (u *ui) drawTreeRow(d *customDraw) {
 		call("FillRect", d.DC, uintptr(unsafe.Pointer(&br)), b)
 		gdi.NewProc("DeleteObject").Call(b)
 	}
-	if image <= 1 {
+	if !peer.Online {
 		u.label(d.DC, "×", rect{int32(u.s(4)), r.Top, int32(u.s(14)), r.Bottom}, u.smallFont, u.palette.Muted, 4)
 	}
 	color := u.palette.Text
-	if selected || u.hovered == d.Item {
-		color = rgb(255, 255, 255)
-	}
+
 	if !peer.Online && !selected {
 		color = u.palette.Muted
 	}
-	split := max(int32(u.s(130)), r.Right-int32(u.s(116)))
+	left, right := peerColumns(int(r.Right), u.dpi)
+	split := int32(left)
 	name := peer.Name
 	ip := peer.IP
 	if peer.Status == "pending" {
-		ip = "Ожидает принятия"
+		ip = tr("Ожидает принятия")
 	}
 	u.label(d.DC, name, rect{int32(u.s(34)), r.Top, split - int32(u.s(8)), r.Bottom}, u.smallFont, color, 4|0x8000)
-	u.label(d.DC, ip, rect{split, r.Top, r.Right - int32(u.s(13)), r.Bottom}, u.smallFont, color, 2|4|0x8000)
+	u.label(d.DC, ip, rect{split, r.Top, int32(right), r.Bottom}, u.smallFont, color, 2|4)
 }
 func (u *ui) toggleHitNetwork() {
 	var p point
@@ -299,9 +333,14 @@ func (u *ui) measureMenu(l uintptr) uintptr {
 	return 1
 }
 func (u *ui) drawMenu(d *drawItem) {
-	b := u.fieldBrush
+	saved, _, _ := gdi.NewProc("SaveDC").Call(d.DC)
+	if saved != 0 {
+		defer gdi.NewProc("RestoreDC").Call(d.DC, saved)
+	}
+	b := brush(u.palette.Menu)
+	defer gdi.NewProc("DeleteObject").Call(b)
 	if d.State&1 != 0 {
-		b = brush(rgb(48, 91, 125))
+		b = brush(u.palette.Selection)
 		defer gdi.NewProc("DeleteObject").Call(b)
 	}
 	call("FillRect", d.DC, uintptr(unsafe.Pointer(&d.Rect)), b)
@@ -330,6 +369,9 @@ func (u *ui) showTopMenu(id int) {
 func (u *ui) mainKey(key uintptr) bool {
 	ctrl := int16(call("GetKeyState", 0x11)) < 0
 	switch key {
+	case 0x2d:
+		u.action(200)
+		return true
 	case 0x74:
 		u.action(208)
 		return true
@@ -355,28 +397,27 @@ func (u *ui) showProperties(peer model.Peer, n model.Network, route, fingerprint
 	if u.dialog != nil {
 		return
 	}
-	var parent rect
-	call("GetWindowRect", u.window, uintptr(unsafe.Pointer(&parent)))
-	title := "Свойства: " + peer.Name
-	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(parent.Left+int32(u.s(22))), uintptr(parent.Top+int32(u.s(100))), uintptr(u.s(340)), uintptr(u.s(360)), u.window, 0, u.instance, 0)
+	x, y := u.dialogBounds(340, 360, 70)
+	title := tr("Свойства: ") + peer.Name
+	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82080000, uintptr(x), uintptr(y), uintptr(u.s(340)), uintptr(u.s(360)), u.window, 0, u.instance, 0)
 	d := &clientDialog{Window: h, Kind: "properties", Controls: map[int]uintptr{}}
 	u.dialog = d
-	role := "Участник"
+	role := tr("Участник")
 	if peer.UserID == n.OwnerID {
-		role = "Владелец"
+		role = tr("Владелец")
 	}
 	for _, section := range []struct {
 		title, body string
 		y, height   int
 	}{
-		{"Свойства", fmt.Sprintf("Имя: %s\nID: %s\nIPv4: %s", peer.Name, peer.ID, peer.IP), 12, 88},
-		{"Состояние сети", fmt.Sprintf("Имя сети: %s\nРоль: %s", n.Name, role), 112, 67},
-		{"Статус подключения", fmt.Sprintf("Статус: %s\nОтпечаток ключа: %s", route, fingerprint), 191, 74},
+		{tr("Свойства"), fmt.Sprintf(tr("Имя: %s\nID: %s\nIPv4: %s"), peer.Name, peer.ID, peer.IP), 12, 88},
+		{tr("Состояние сети"), fmt.Sprintf(tr("Имя сети: %s\nРоль: %s"), n.Name, role), 112, 67},
+		{tr("Статус подключения"), fmt.Sprintf(tr("Статус: %s\nОтпечаток ключа: %s"), route, fingerprint), 191, 74},
 	} {
 		u.add(h, d.Controls, section.y, "STATIC", section.title, 18, section.y, 296, 20, 0)
 		u.add(h, d.Controls, section.y+1, "STATIC", section.body, 24, section.y+25, 284, section.height-20, 0)
 	}
-	u.add(h, d.Controls, 2, "BUTTON", "Закрыть", 214, 286, 100, 30, 0xb)
+	u.add(h, d.Controls, 2, "BUTTON", tr("Закрыть"), 214, 286, 100, 30, 0xb)
 	u.themeWindow(h)
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)
@@ -390,7 +431,7 @@ func (u *ui) loadPreview() {
 		u.largePreview()
 		return
 	}
-	names := []string{"chukotka-museum", "lknet-home", "LinkLAN · друзья"}
+	names := []string{"chukotka-museum", "lknet-home", tr("LinkLAN · друзья")}
 	for i, name := range names {
 		id := fmt.Sprint(i)
 		n := model.Network{ID: id, Name: name, OwnerID: "preview-owner", IP: "26.27.94.226", Status: "approved"}
@@ -407,17 +448,23 @@ func (u *ui) loadPreview() {
 	u.wanted = true
 	u.renderTree()
 	u.header()
-	set(u.controls[999], "Предпросмотр интерфейса · VPN не запущен")
+	set(u.controls[999], tr("Предпросмотр интерфейса · VPN не запущен"))
 }
 
 func (u *ui) themeWindow(h uintptr) {
 	dark := int32(1)
-	if u.store.Snapshot().Theme == "light" {
+	if u.light {
 		dark = 0
 	}
 	send(h, 0x80, 1, u.icon)
 	send(h, 0x80, 0, u.smallIcon)
 	windows.NewLazySystemDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(h, 20, uintptr(unsafe.Pointer(&dark)), 4)
+	u.roundWindow(h)
+	if u.dialog != nil && h == u.dialog.Window && u.dialog.Controls[1199] == 0 {
+		var r rect
+		call("GetClientRect", h, uintptr(unsafe.Pointer(&r)))
+		u.add(h, u.dialog.Controls, 1199, "BUTTON", "×", logicalPixel(int(r.Right), u.dpi)-34, -32, 32, 32, 0xb)
+	}
 }
 
 // CheckIcon exercises the actual executable resources, including every common size.
@@ -437,13 +484,12 @@ func (u *ui) showMessage(title, body string) {
 	if u.dialog != nil {
 		return
 	}
-	var parent rect
-	call("GetWindowRect", u.window, uintptr(unsafe.Pointer(&parent)))
-	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82c80000, uintptr(parent.Left+int32(u.s(20))), uintptr(parent.Top+int32(u.s(100))), uintptr(u.s(400)), uintptr(u.s(280)), u.window, 0, u.instance, 0)
+	x, y := u.dialogBounds(400, 280, 70)
+	h := call("CreateWindowExW", 0, uintptr(unsafe.Pointer(wide("LinkLANDialogV2"))), uintptr(unsafe.Pointer(wide(title))), 0x82080000, uintptr(x), uintptr(y), uintptr(u.s(400)), uintptr(u.s(280)), u.window, 0, u.instance, 0)
 	d := &clientDialog{Window: h, Kind: "info", Controls: map[int]uintptr{}}
 	u.dialog = d
 	u.add(h, d.Controls, 11, "STATIC", body, 18, 18, 350, 165, 0)
-	u.add(h, d.Controls, 2, "BUTTON", "Закрыть", 266, 196, 100, 30, 0xb)
+	u.add(h, d.Controls, 2, "BUTTON", tr("Закрыть"), 266, 196, 100, 30, 0xb)
 	u.themeWindow(h)
 	call("EnableWindow", u.window, 0)
 	call("ShowWindow", h, 1)
@@ -461,9 +507,9 @@ func (u *ui) roundedRadius(dc uintptr, r rect, fill uintptr, radius int) {
 func (u *ui) largePreview() {
 	for i := 0; i < 50; i++ {
 		id := fmt.Sprint(i)
-		v := model.NetworkView{Network: model.Network{ID: id, Name: fmt.Sprintf("Сеть %02d", i+1), IP: "26.27.94.226", Status: "approved", OwnerID: "preview-owner"}}
+		v := model.NetworkView{Network: model.Network{ID: id, Name: fmt.Sprintf(tr("Сеть %02d"), i+1), IP: "26.27.94.226", Status: "approved", OwnerID: "preview-owner"}}
 		for j := 0; j < 10; j++ {
-			p := model.Peer{ID: fmt.Sprintf("%d-%d", i, j), Name: fmt.Sprintf("Компьютер-%02d · длинное имя", i*10+j), IP: fmt.Sprintf("26.%d.17.%d", i+10, j+10), Status: "approved", Online: j%4 != 0}
+			p := model.Peer{ID: fmt.Sprintf("%d-%d", i, j), Name: fmt.Sprintf(tr("Компьютер-%02d · длинное имя"), i*10+j), IP: fmt.Sprintf("26.%d.17.%d", i+10, j+10), Status: "approved", Online: j%4 != 0}
 			v.Peers = append(v.Peers, p)
 			u.echoes[p.ID] = echoState{Measured: true, Reachable: p.Online, RTT: time.Duration(j*30) * time.Millisecond}
 		}

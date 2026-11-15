@@ -78,30 +78,30 @@ func EnsureAdmin() (bool, error) {
 	}
 	v, _, _ = shell.NewProc("ShellExecuteW").Call(0, uintptr(unsafe.Pointer(wide("runas"))), uintptr(unsafe.Pointer(wide(exe))), uintptr(unsafe.Pointer(wide(strings.Join(args, " ")))), 0, 1)
 	if v <= 32 {
-		return false, fmt.Errorf("Для Wintun требуется запуск от имени администратора")
+		return false, fmt.Errorf(tr("Для Wintun требуется запуск от имени администратора"))
 	}
 	return false, nil
 }
 func clipboard(h uintptr, value string) error {
 	if call("OpenClipboard", h) == 0 {
-		return fmt.Errorf("Буфер обмена занят")
+		return fmt.Errorf(tr("Буфер обмена занят"))
 	}
 	defer call("CloseClipboard")
 	call("EmptyClipboard")
 	b, _ := windows.UTF16FromString(value)
 	memory, _, _ := kernel.NewProc("GlobalAlloc").Call(2, uintptr(len(b)*2))
 	if memory == 0 {
-		return fmt.Errorf("Недостаточно памяти")
+		return fmt.Errorf(tr("Недостаточно памяти"))
 	}
 	ptr, _, _ := kernel.NewProc("GlobalLock").Call(memory)
 	if ptr == 0 {
-		return fmt.Errorf("Буфер обмена недоступен")
+		return fmt.Errorf(tr("Буфер обмена недоступен"))
 	}
 	copy(unsafe.Slice((*uint16)(unsafe.Pointer(ptr)), len(b)), b)
 	kernel.NewProc("GlobalUnlock").Call(memory)
 	if call("SetClipboardData", 13, memory) == 0 {
 		kernel.NewProc("GlobalFree").Call(memory)
-		return fmt.Errorf("Не удалось скопировать")
+		return fmt.Errorf(tr("Не удалось скопировать"))
 	}
 	return nil
 }

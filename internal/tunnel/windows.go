@@ -211,7 +211,7 @@ func LoadStore() (*Store, error) {
 	if e != nil {
 		return nil, e
 	}
-	c := Config{DeviceName: DefaultDeviceName(), Theme: "dark", AutoConnect: true, Profiles: map[string]Profile{}}
+	c := Config{DeviceName: DefaultDeviceName(), Theme: "light", AutoConnect: true, Profiles: map[string]Profile{}}
 	b, e := os.ReadFile(path)
 	if e == nil {
 		clear, e := protect(b, false)
