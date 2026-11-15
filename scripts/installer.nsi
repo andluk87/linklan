@@ -31,15 +31,25 @@ close_client_failed:
 close_client_done:
 !macroend
 Function un.onInit
-  IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
-  ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+  ${If} ${FileExists} "$INSTDIR\LinkLAN.exe"
+    ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+    ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONSTOP "Не удалось завершить LinkLAN. Выполните Выход через меню программы и повторите." /SD IDOK
+      Abort
+    ${EndIf}
+  ${EndIf}
   !insertmacro CloseLinkLAN
   IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
   ExecWait '"$INSTDIR\LinkLAN.exe" --autostart disable' $0
 FunctionEnd
 Function .onInit
-  IfFileExists "$INSTDIR\LinkLAN.exe" 0 +2
-  ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+  ${If} ${FileExists} "$INSTDIR\LinkLAN.exe"
+    ExecWait '"$INSTDIR\LinkLAN.exe" --quit' $0
+    ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONSTOP "Не удалось завершить LinkLAN. Выполните Выход через меню программы и повторите." /SD IDOK
+      Abort
+    ${EndIf}
+  ${EndIf}
   !insertmacro CloseLinkLAN
   ${IfNot} ${RunningX64}
     MessageBox MB_OK "Требуется Windows x64."

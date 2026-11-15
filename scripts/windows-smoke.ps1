@@ -69,6 +69,15 @@ try {
  Run-Client @('--quit');if(-not $p.WaitForExit(30000)-or $p.ExitCode -ne 0){throw 'Frontend did not shut down'}
  if(Get-Process -Id $workerId -ErrorAction SilentlyContinue){throw 'Go engine survived frontend exit'}
 }finally{if(-not $p.HasExited){$p.Kill($true)}}
+# Reinstall over an active WPF process: --quit must wait until both processes release files.
+$upgradeClient=Start-Process $client -ArgumentList '--show' -PassThru
+try {
+ Start-Sleep -Seconds 2
+ $upgrade=Start-Process $installer -ArgumentList '/S' -PassThru
+ if(-not $upgrade.WaitForExit(90000)-or $upgrade.ExitCode -ne 0){throw 'Upgrade over a running WPF client failed'}
+ if(-not $upgradeClient.WaitForExit(10000)){throw 'Upgrade did not await frontend shutdown'}
+ if(Get-Process -Name 'LinkLAN-engine' -ErrorAction SilentlyContinue){throw 'Upgrade left Go worker running'}
+}finally{if(-not $upgradeClient.HasExited){$upgradeClient.Kill($true)}}
 $profile=Join-Path $env:APPDATA 'LinkLAN/profile.dpapi';if(-not(Test-Path $profile)){throw 'Existing DPAPI profile format not preserved'}
 Assert-Identity (Read-Profile)
 # Uninstall removes only package-owned files, preserving unrelated files and DPAPI profile.
