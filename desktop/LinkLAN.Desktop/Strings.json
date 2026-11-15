@@ -240,5 +240,16 @@
   "ID устройства": "Device ID",
   "Отпечаток ключа": "Key fingerprint",
   "Открыть": "Open",
-  "Обновить": "Refresh"
+  "Обновить": "Refresh",
+  "IP-адрес": "IP address",
+  "Копировать": "Copy",
+  "Общие папки": "Shared folders",
+  "Отключиться": "Disconnect",
+  "Пароль": "Password",
+  "Покинуть сеть…": "Leave network…",
+  "Создать приглашение…": "Create invitation…",
+  "Статус": "Status",
+  "Удалить сеть…": "Delete network…",
+  "Удалённый рабочий стол": "Remote Desktop",
+  "Подсеть": "Subnet"
 }

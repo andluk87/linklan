@@ -33,6 +33,9 @@ Run-Client @('--self-test')
 Run-Client @('--autostart','enable');Run-Client @('--autostart','enable')
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;$taskName='LinkLAN-'+$sid
 $task=Get-ScheduledTask -TaskName $taskName
+$principalSid=$task.Principal.UserId
+if($principalSid -ne $sid){$principalSid=([Security.Principal.NTAccount]::new($principalSid)).Translate([Security.Principal.SecurityIdentifier]).Value}
+if($principalSid -ne $sid){throw 'Autostart uses another user identity'}
 if($task.Actions[0].Execute -ne $client -or $task.Actions[0].Arguments -ne '--start-hidden' -or "$($task.Principal.LogonType)" -ne 'Interactive' -or "$($task.Principal.RunLevel)" -ne 'Highest'){throw 'Autostart does not target WPF frontend'}
 Run-Client @('--autostart','disable')
 if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){throw 'Autostart not removed'}

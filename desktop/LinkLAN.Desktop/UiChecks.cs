@@ -26,7 +26,7 @@ public static class UiChecks
                 Invalidate(root); root.UpdateLayout(); await Layout(); var clean = Capture(shell.Window);
                 Assert(after.PixelWidth == clean.PixelWidth && after.PixelHeight == clean.PixelHeight, "resize geometry drift");
                 if (!Pixels(after).SequenceEqual(Pixels(clean))) { Save(after, Path.Combine(path, "resize-before.png")); Save(clean, Path.Combine(path, "resize-clean.png")); throw new InvalidOperationException("retained frame differs from full repaint at " + width + " / " + scale); }
-                var ips = Descendants<TextBlock>(shell.Tree).Where(t => System.Windows.Automation.AutomationProperties.GetAutomationId(t) == "PeerIp").ToArray();
+                var ips = Descendants<TextBlock>(shell.Tree).Where(t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetAutomationId(t) == "PeerIp").ToArray();
                 Assert(ips.Length > 0, "no IP cells rendered"); foreach (var ip in ips) { Assert(ip.Text.Count(c => c == '.') == 3, "invalid IP cell"); Assert(ip.ActualWidth <= 112.5, "IP escaped its reserved column"); }
                 var name = $"main-{theme}-{width}-{(int)(scale * 100)}"; Save(after, Path.Combine(path, name + ".png")); results.Add(new { name, passed = true, width, scale });
             }
