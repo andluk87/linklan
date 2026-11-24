@@ -42,11 +42,11 @@ if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){throw 'A
 # Actual WPF templates, bindings, retained rendering and dialogs execute on Windows.
 Run-Client @('--ui-check','--validation-dir',('"'+$validation+'"')) 180000
 $report=Get-Content (Join-Path $validation 'wpf-check.json') -Raw|ConvertFrom-Json
-if(-not $report.passed -or $report.cases.Count -ne 16){throw 'WPF layout matrix failed'}
+if(-not $report.passed -or $report.cases.Count -ne 30){throw 'WPF layout matrix failed'}
 # Seed a prior-version DPAPI profile and verify identity/settings survive UI migration.
 Add-Type -AssemblyName System.Security
 $profile=Join-Path $env:APPDATA 'LinkLAN/profile.dpapi'
-$seed=@{DeviceName='Migrated PC';Theme='dark';Language='en';StartAtLogon=$false;StartInTray=$false;AutoConnect=$false;NetworkID='preserved-network';Profiles=@{'device|https://example.test/api'=@{device_id='preserved-device';private_key='fixture-private-key';refresh_token='fixture-refresh';peer_keys=@{peer='fixture-pin'}}};ExpandedNetworks=@{'preserved-network'=$false}}|ConvertTo-Json -Depth 8 -Compress
+$seed=@{DeviceName='Migrated PC';Theme='dark';Language='en';StartAtLogon=$false;StartInTray=$false;AutoConnect=$false;NetworkID='preserved-network';Window=@{Width=571;Height=480;Positioned=$false};WindowDIP=$true;Profiles=@{'device|https://example.test/api'=@{device_id='preserved-device';private_key='fixture-private-key';refresh_token='fixture-refresh';peer_keys=@{peer='fixture-pin'}}};ExpandedNetworks=@{'preserved-network'=$false}}|ConvertTo-Json -Depth 8 -Compress
 $encrypted=[Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($seed),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
 [IO.File]::WriteAllBytes($profile,$encrypted)
 function Read-Profile {[Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($profile),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))|ConvertFrom-Json}
@@ -69,6 +69,12 @@ try {
  Run-Client @('--quit');if(-not $p.WaitForExit(30000)-or $p.ExitCode -ne 0){throw 'Frontend did not shut down'}
  if(Get-Process -Id $workerId -ErrorAction SilentlyContinue){throw 'Go engine survived frontend exit'}
 }finally{if(-not $p.HasExited){$p.Kill($true)}}
+$migrated=Read-Profile
+if($migrated.Window.Width -ne 360 -or $migrated.Window.Height -ne 480 -or $migrated.WindowLayoutVersion -ne 1){throw 'Legacy wide window did not migrate to compact layout'}
+# The next launch must preserve a deliberate size in the new layout.
+$migrated.Window.Width=420
+$updated=[Text.Encoding]::UTF8.GetBytes(($migrated|ConvertTo-Json -Depth 8 -Compress))
+[IO.File]::WriteAllBytes($profile,[Security.Cryptography.ProtectedData]::Protect($updated,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))
 # Reinstall over an active WPF process: --quit must wait until both processes release files.
 $upgradeClient=Start-Process $client -ArgumentList '--show' -PassThru
 try {
@@ -80,6 +86,7 @@ try {
 }finally{if(-not $upgradeClient.HasExited){$upgradeClient.Kill($true)}}
 $profile=Join-Path $env:APPDATA 'LinkLAN/profile.dpapi';if(-not(Test-Path $profile)){throw 'Existing DPAPI profile format not preserved'}
 Assert-Identity (Read-Profile)
+if((Read-Profile).Window.Width -ne 420){throw 'Saved width after migration was reset again'}
 # Uninstall removes only package-owned files, preserving unrelated files and DPAPI profile.
 Set-Content (Join-Path $installDir 'user-note.txt') 'keep'
 $p=Start-Process (Join-Path $installDir 'Uninstall.exe') -ArgumentList '/S' -PassThru

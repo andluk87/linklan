@@ -14,6 +14,7 @@ public class Preferences
     public bool AutoConnect { get; set; }
     public bool StartAtLogon { get; set; } = true; public bool StartInTray { get; set; } = true; public bool NotifyDesktop { get; set; } = true; public bool NotifySound { get; set; } = true; public bool RespectFocus { get; set; } = true; public bool FirewallAllowed { get; set; }
     public WindowPosition Window { get; set; } = new(); public bool WindowDip { get; set; }
+    public int WindowLayoutVersion { get; set; }
     public Dictionary<string, bool>? Expanded { get; set; }
 }
 public class PeerInfo { public string Id { get; set; } = ""; public string UserId { get; set; } = ""; public string Name { get; set; } = ""; public string Ip { get; set; } = ""; public bool Online { get; set; } public string Status { get; set; } = ""; public string Route { get; set; } = ""; public bool Measured { get; set; } public bool Reachable { get; set; } public long? RttMs { get; set; } public string Fingerprint { get; set; } = ""; }

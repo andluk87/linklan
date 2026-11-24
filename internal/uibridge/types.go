@@ -5,20 +5,21 @@ package uibridge
 import "linklan/internal/tunnel"
 
 type Settings struct {
-	Server          string             `json:"server"`
-	DeviceName      string             `json:"deviceName"`
-	Theme           string             `json:"theme"`
-	Language        string             `json:"language"`
-	AutoConnect     bool               `json:"autoConnect"`
-	StartAtLogon    bool               `json:"startAtLogon"`
-	StartInTray     bool               `json:"startInTray"`
-	NotifyDesktop   bool               `json:"notifyDesktop"`
-	NotifySound     bool               `json:"notifySound"`
-	RespectFocus    bool               `json:"respectFocus"`
-	FirewallAllowed bool               `json:"firewallAllowed"`
-	Window          tunnel.WindowState `json:"window"`
-	WindowDIP       bool               `json:"windowDip"`
-	Expanded        map[string]bool    `json:"expanded"`
+	Server              string             `json:"server"`
+	DeviceName          string             `json:"deviceName"`
+	Theme               string             `json:"theme"`
+	Language            string             `json:"language"`
+	AutoConnect         bool               `json:"autoConnect"`
+	StartAtLogon        bool               `json:"startAtLogon"`
+	StartInTray         bool               `json:"startInTray"`
+	NotifyDesktop       bool               `json:"notifyDesktop"`
+	NotifySound         bool               `json:"notifySound"`
+	RespectFocus        bool               `json:"respectFocus"`
+	FirewallAllowed     bool               `json:"firewallAllowed"`
+	Window              tunnel.WindowState `json:"window"`
+	WindowDIP           bool               `json:"windowDip"`
+	WindowLayoutVersion int                `json:"windowLayoutVersion"`
+	Expanded            map[string]bool    `json:"expanded"`
 }
 type Peer struct {
 	ID          string `json:"id"`
@@ -83,5 +84,5 @@ func option(v *bool, otherwise bool) bool {
 	return *v
 }
 func publicSettings(c tunnel.Config) Settings {
-	return Settings{c.Server, c.DeviceName, c.Theme, c.Language, c.AutoConnect, option(c.StartAtLogon, true), option(c.StartInTray, true), option(c.NotifyDesktop, true), option(c.NotifySound, true), option(c.RespectFocus, true), c.FirewallAllowed, c.Window, c.WindowDIP, c.ExpandedNetworks}
+	return Settings{c.Server, c.DeviceName, c.Theme, c.Language, c.AutoConnect, option(c.StartAtLogon, true), option(c.StartInTray, true), option(c.NotifyDesktop, true), option(c.NotifySound, true), option(c.RespectFocus, true), c.FirewallAllowed, c.Window, c.WindowDIP, c.WindowLayoutVersion, c.ExpandedNetworks}
 }

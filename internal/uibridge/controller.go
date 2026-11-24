@@ -504,6 +504,7 @@ func (c *Controller) preferences(p Preferences) error {
 		if p.Window != nil {
 			cfg.Window = *p.Window
 			cfg.WindowDIP = true
+			cfg.WindowLayoutVersion = 1
 		}
 		if p.Expanded != nil {
 			cfg.ExpandedNetworks = p.Expanded

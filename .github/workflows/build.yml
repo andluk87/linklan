@@ -113,6 +113,38 @@ jobs:
           path: validation/
           if-no-files-found: warn
 
+  preview:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build, windows-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LinkLAN-v${{ needs.build.outputs.version }}
+          path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: LinkLAN-windows-check-v${{ needs.build.outputs.version }}
+          path: validation
+      - name: Prepare draft for visual review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > /tmp/draft-state 2>/dev/null; then
+            if [ "$(cat /tmp/draft-state)" != true ]; then exit 0; fi
+          else
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "LinkLAN $TAG — visual review" --notes "Windows-validated candidate; screenshots included for visual review before publication."
+          fi
+          (cd validation && zip -q -r "../artifacts/LinkLAN-UI-preview-v${VERSION}.zip" .)
+          (cd artifacts && sha256sum *.zip *.exe > SHA256SUMS.txt)
+          gh release edit "$TAG" --target "$GITHUB_SHA"
+          gh release upload "$TAG" artifacts/* --clobber
+
   release:
     if: github.ref_type == 'tag'
     needs: [build, windows-smoke]
@@ -124,9 +156,26 @@ jobs:
         with:
           name: LinkLAN-v${{ needs.build.outputs.version }}
           path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: LinkLAN-windows-check-v${{ needs.build.outputs.version }}
+          path: validation
+      - name: Package UI review images
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          (cd validation && zip -q -r "../artifacts/LinkLAN-UI-preview-v${VERSION}.zip" .)
+          (cd artifacts && sha256sum *.zip *.exe > SHA256SUMS.txt)
       - name: Publish versioned files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" artifacts/* --verify-tag --title "LinkLAN $TAG" --generate-notes
+        run: |
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > /tmp/release-state 2>/dev/null; then
+            if [ "$(cat /tmp/release-state)" != true ]; then echo 'Refusing to replace a published release'; exit 1; fi
+            gh release upload "$TAG" artifacts/* --clobber
+            gh release edit "$TAG" --draft=false --title "LinkLAN $TAG"
+          else
+            gh release create "$TAG" artifacts/* --verify-tag --title "LinkLAN $TAG" --generate-notes
+          fi

@@ -15,9 +15,9 @@ public static class UiChecks
         int index = Array.IndexOf(args, "--validation-dir"); string path = index >= 0 && index + 1 < args.Length ? Path.GetFullPath(args[index + 1]) : Path.Combine(AppContext.BaseDirectory, "validation"); Directory.CreateDirectory(path); var results = new List<object>(); try
         {
             shell.Window.Show(); await Layout(); Assert(shell.VM.Networks.Count == 50, "large fixture missing"); var first = shell.VM.Networks[0].Children[0]; Assert(shell.VM.Networks[0].Children[1].Name == shell.VM.Networks[0].Children[2].Name, "duplicate-name fixture missing");
-            foreach (string theme in new[] { "light", "dark" }) foreach (double scale in new[] { 1.0, 1.25, 1.5, 2.0 }) foreach (int width in new[] { 250, 440 })
+            foreach (string theme in new[] { "light", "dark" }) foreach (double scale in new[] { 1.0, 1.25, 1.5, 1.75, 2.0 }) foreach (int width in new[] { 320, 360, 420 })
             {
-                Appearance.Apply(theme, true); shell.VM.RefreshAppearance(); shell.Window.Width = width; shell.Window.Height = 500; var root = (FrameworkElement)shell.Window.Content; root.LayoutTransform = new ScaleTransform(scale, scale); shell.Window.Width = width * scale; shell.Window.Height = 500 * scale; await Layout(); var power = shell.Find<Button>("PowerButton"); power.Focus(); await Layout(); Assert(power.FocusVisualStyle == null, "power has rectangular default focus visual"); Assert(power.ActualWidth == 62 && power.ActualHeight == 62, "power circle stretched");
+                Appearance.Apply(theme, true); shell.VM.RefreshAppearance(); shell.Window.Width = width; shell.Window.Height = 500; var root = (FrameworkElement)shell.Window.Content; root.LayoutTransform = new ScaleTransform(scale, scale); shell.Window.Width = width * scale; shell.Window.Height = 500 * scale; await Layout(); var power = shell.Find<Button>("PowerButton"); power.Focus(); await Layout(); Assert(power.FocusVisualStyle == null, "power has rectangular default focus visual"); Assert(power.ActualWidth == 54 && power.ActualHeight == 54, "power circle stretched");
                 for (int n = 0; n < 8; n++) { shell.Window.Width = (width + 30 + n) * scale; await Layout(); shell.Window.Width = width * scale; await Layout(); }
                 // Compare the retained frame after resizing with an explicit full repaint at
                 // the same final geometry. Scroll extent estimation may legitimately
@@ -27,8 +27,11 @@ public static class UiChecks
                 Assert(after.PixelWidth == clean.PixelWidth && after.PixelHeight == clean.PixelHeight, "resize geometry drift");
                 if (!Pixels(after).SequenceEqual(Pixels(clean))) { Save(after, Path.Combine(path, "resize-before.png")); Save(clean, Path.Combine(path, "resize-clean.png")); throw new InvalidOperationException("retained frame differs from full repaint at " + width + " / " + scale); }
                 var ips = Descendants<TextBlock>(shell.Tree).Where(t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetAutomationId(t) == "PeerIp").ToArray();
-                Assert(ips.Length > 0, "no IP cells rendered"); foreach (var ip in ips) { Assert(ip.Text.Count(c => c == '.') == 3, "invalid IP cell"); Assert(ip.ActualWidth <= 92.5, "IP escaped its reserved column");Assert(ip.HorizontalAlignment==HorizontalAlignment.Left,"IP addresses are right aligned");Assert(ip.FontSize==11,"peer font differs from reference");
-                    var row=VisualTreeHelper.GetParent(ip) as FrameworkElement;Assert(row!=null&&Math.Abs(row.ActualHeight-20)<1,"peer row height differs from reference"); }
+                Assert(ips.Length > 0, "no IP cells rendered"); foreach (var ip in ips)
+                {
+                    Assert(ip.Text.Count(c => c == '.') == 3, "invalid IP cell"); Assert(ip.ActualWidth <= 104.5, "IP escaped its reserved column"); Assert(ip.HorizontalAlignment == HorizontalAlignment.Left, "IP addresses are right aligned"); Assert(ip.FontSize == 12, "peer text is too small");
+                    var row = VisualTreeHelper.GetParent(ip) as FrameworkElement; Assert(row != null && Math.Abs(row.ActualHeight - 22) < 1, "peer row height differs from reference");
+                }
                 var name = $"main-{theme}-{width}-{(int)(scale * 100)}"; Save(after, Path.Combine(path, name + ".png")); results.Add(new { name, passed = true, width, scale });
             }
             ((FrameworkElement)shell.Window.Content).LayoutTransform = Transform.Identity;
@@ -43,11 +46,45 @@ public static class UiChecks
             var tooltip = new ToolTip { Content = first.Tip, PlacementTarget = shell.Tree, IsOpen = true }; await Layout(); Save(Capture(tooltip), Path.Combine(path, "tooltip.png")); tooltip.IsOpen = false;
             ((FrameworkElement)shell.Window.Content).LayoutTransform = Transform.Identity; shell.Window.Width = 540; shell.Window.Height = 600; await shell.Patch(new { language = "en", theme = "light" }); Assert(shell.VM.L["Система"] == "System", "language did not apply"); Assert(ReferenceEquals(first, shell.VM.Networks[0].Children[0]), "refresh recreated peer rows"); await shell.Engine.Call("disconnect"); await shell.Refresh(); Assert(!shell.VM.Connected, "power off did not reach engine"); await shell.Engine.Call("connect", new { networkId = "preview-1" }); await shell.Refresh(); Assert(shell.VM.Connected, "power on did not reach engine"); await shell.Patch(new { language = "ru", theme = "light" });
             for (int page = 0; page < 6; page++) { var dialog = Dialogs.Settings(shell, page); dialog.Show(); await Layout(); Save(Capture((FrameworkElement)dialog.Content), Path.Combine(path, $"settings-{page}.png")); dialog.Close(); }
+            Assert(LayoutPolicy.RestoreWidth(new Preferences { Window = new WindowPosition { Width = 571 }, WindowLayoutVersion = 0 }) == 360, "legacy wide window was not compacted");
+            Assert(LayoutPolicy.RestoreWidth(new Preferences { Window = new WindowPosition { Width = 420 }, WindowLayoutVersion = 1 }) == 420, "user resize was overwritten");
+            await CompactReview(shell, path);
             await shell.Engine.Call("shutdown"); await Task.Delay(200); var clock = System.Diagnostics.Stopwatch.StartNew(); bool stopped = false; try { await shell.Engine.State().WaitAsync(TimeSpan.FromSeconds(3)); } catch (IOException) { stopped = true; }
             Assert(stopped && clock.Elapsed.TotalSeconds < 2, "worker exit left a pending UI request");
             File.WriteAllText(Path.Combine(path, "wpf-check.json"), JsonSerializer.Serialize(new { passed = true, framework = "WPF", cases = results, duplicateNames = true, stableRows = true, enginePower = true }, new JsonSerializerOptions { WriteIndented = true })); return 0;
         }
         catch (Exception e) { File.WriteAllText(Path.Combine(path, "wpf-check.json"), JsonSerializer.Serialize(new { passed = false, error = e.ToString(), cases = results }, new JsonSerializerOptions { WriteIndented = true })); return 1; }
+    }
+    static async Task CompactReview(MainShell shell, string path)
+    {
+        var snapshot = await shell.Engine.State();
+        var state = JsonSerializer.Deserialize<PublicState>(JsonSerializer.Serialize(snapshot, EngineClient.Json), EngineClient.Json)!;
+        state.Settings.DeviceName = "DESKTOP-8QR3913"; state.OwnIp = "10.32.0.4";
+        var network = new NetworkInfo
+        {
+            Id = "review-network",
+            Name = "lknet-home",
+            OwnerId = "owner",
+            Ip = state.OwnIp,
+            Status = "approved",
+            Peers = [
+            new(){Id="review-home",Name="and-home",Ip="10.32.0.2",Online=false},
+            new(){Id="review-work",Name="and-work",Ip="10.32.0.3",Online=false},
+            new(){Id="review-active",Name="and-work",Ip="10.32.0.5",Online=true,Measured=true,Reachable=true,RttMs=25}]
+        };
+        state.Networks = [network]; shell.VM.Apply(state); shell.Window.Left = 20; shell.Window.Top = 20;
+        foreach (var theme in new[] { "dark", "light" }) foreach (double scale in new[] { 1.0, 1.75 })
+        {
+            Appearance.Apply(theme, true); shell.VM.RefreshAppearance(); var root = (FrameworkElement)shell.Window.Content; root.LayoutTransform = new ScaleTransform(scale, scale); shell.Window.Width = 360 * scale; shell.Window.Height = 480 * scale;
+            var model = shell.VM.Networks[0]; model.Selected = true; await Layout(); shell.Tree.UpdateLayout();
+            var item = (TreeViewItem)shell.Tree.ItemContainerGenerator.ContainerFromItem(model);
+            var header = (Border)item.Template.FindName("Highlight", item);
+            Assert(header.Background is SolidColorBrush color && color.Color.A == 0, "network header has a filled selection band");
+            Save(Capture(shell.Window), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-network.png"));
+            model.Selected = false; model.Children[2].Selected = true; await Layout();
+            Save(Capture(shell.Window), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-peer.png"));
+            model.Children[2].Selected = false;
+        }
     }
     static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject { for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) { var child = VisualTreeHelper.GetChild(root, i); if (child is T item) yield return item; foreach (var nested in Descendants<T>(child)) yield return nested; } }
     static void Invalidate(DependencyObject root) { if (root is UIElement element) { element.InvalidateMeasure(); element.InvalidateArrange(); element.InvalidateVisual(); } for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) Invalidate(VisualTreeHelper.GetChild(root, i)); }

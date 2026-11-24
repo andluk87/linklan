@@ -25,7 +25,7 @@ func TestPublicStateAndPreferencesPreserveIdentity(t *testing.T) {
 	}
 	cfg := store.Snapshot()
 	profile := cfg.Profiles["device|https://example.test/api"]
-	if cfg.Theme != "dark" || cfg.Language != "en" || cfg.StartInTray == nil || *cfg.StartInTray || !cfg.WindowDIP || profile.PrivateKey != "SECRET_PRIVATE" || profile.Refresh != "SECRET_REFRESH" || profile.PeerKeys["peer"] != "PINNED_KEY" || cfg.NetworkID != "saved-network" {
+	if cfg.Theme != "dark" || cfg.Language != "en" || cfg.StartInTray == nil || *cfg.StartInTray || !cfg.WindowDIP || cfg.WindowLayoutVersion != 1 || profile.PrivateKey != "SECRET_PRIVATE" || profile.Refresh != "SECRET_REFRESH" || profile.PeerKeys["peer"] != "PINNED_KEY" || cfg.NetworkID != "saved-network" {
 		t.Fatalf("preferences replaced identity: %#v", cfg)
 	}
 	raw, err := json.Marshal(c.State())

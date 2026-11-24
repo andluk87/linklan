@@ -42,6 +42,7 @@ type Config struct {
 	StartAtLogon                             *bool
 	Window                                   WindowState
 	WindowDIP                                bool
+	WindowLayoutVersion                      int
 	ExpandedNetworks                         map[string]bool
 	FirewallAllowed                          bool
 	NetworkID                                string
