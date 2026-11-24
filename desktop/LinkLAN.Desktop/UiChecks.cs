@@ -34,9 +34,9 @@ public static class UiChecks
                 }
                 foreach (var icon in Descendants<Canvas>(shell.Tree).Where(e => e.IsVisible && System.Windows.Automation.AutomationProperties.GetAutomationId(e) == "PeerSignal"))
                 {
-                    var cross = icon.Children.OfType<System.Windows.Shapes.Path>().Single(); var firstBar = icon.Children.OfType<System.Windows.Shapes.Rectangle>().First();
-                    Assert(cross.Data.Bounds.Right + cross.StrokeThickness / 2 + 2 <= Canvas.GetLeft(firstBar), "offline cross overlaps signal bars");
-                    var node = (NodeVM)icon.DataContext; Assert((cross.Visibility == Visibility.Visible) == !node.Online, "offline cross does not match presence"); Assert(icon.ActualWidth == 19, "presence status shifted the computer name");
+                    var cross = icon.Children.OfType<System.Windows.Shapes.Path>().Single(); var bars=icon.Children.OfType<System.Windows.Shapes.Rectangle>().ToArray();var node=(NodeVM)icon.DataContext;var firstBar=bars[node.Online?0:1];
+                    Assert(node.Online||cross.Data.Bounds.Right + cross.StrokeThickness / 2 + 1 <= Canvas.GetLeft(firstBar), "offline cross overlaps signal bars");
+                    Assert((cross.Visibility == Visibility.Visible) == !node.Online, "offline cross does not match presence"); Assert(icon.ActualWidth == 19, "presence status shifted the computer name");Assert((bars[0].Visibility==Visibility.Visible)==node.Online,"offline glyph does not replace shortest bar");
                 }
                 var name = $"main-{theme}-{width}-{(int)(scale * 100)}"; Save(after, Path.Combine(path, name + ".png")); results.Add(new { name, passed = true, width, scale });
             }
