@@ -32,6 +32,12 @@ public static class UiChecks
                     Assert(ip.Text.Count(c => c == '.') == 3, "invalid IP cell"); Assert(ip.ActualWidth <= 104.5, "IP escaped its reserved column"); Assert(ip.HorizontalAlignment == HorizontalAlignment.Left, "IP addresses are right aligned"); Assert(ip.FontSize == 12, "peer text is too small");
                     var row = VisualTreeHelper.GetParent(ip) as FrameworkElement; Assert(row != null && Math.Abs(row.ActualHeight - 22) < 1, "peer row height differs from reference");
                 }
+                foreach (var icon in Descendants<Canvas>(shell.Tree).Where(e => e.IsVisible && System.Windows.Automation.AutomationProperties.GetAutomationId(e) == "PeerSignal"))
+                {
+                    var cross = icon.Children.OfType<System.Windows.Shapes.Path>().Single(); var firstBar = icon.Children.OfType<System.Windows.Shapes.Rectangle>().First();
+                    Assert(cross.Data.Bounds.Right + cross.StrokeThickness / 2 + 2 <= Canvas.GetLeft(firstBar), "offline cross overlaps signal bars");
+                    var node = (NodeVM)icon.DataContext; Assert((cross.Visibility == Visibility.Visible) == !node.Online, "offline cross does not match presence"); Assert(icon.ActualWidth == 19, "presence status shifted the computer name");
+                }
                 var name = $"main-{theme}-{width}-{(int)(scale * 100)}"; Save(after, Path.Combine(path, name + ".png")); results.Add(new { name, passed = true, width, scale });
             }
             ((FrameworkElement)shell.Window.Content).LayoutTransform = Transform.Identity;
@@ -75,14 +81,15 @@ public static class UiChecks
         state.Networks = [network]; shell.VM.Apply(state); shell.Window.Left = 20; shell.Window.Top = 20;
         foreach (var theme in new[] { "dark", "light" }) foreach (double scale in new[] { 1.0, 1.75 })
         {
-            Appearance.Apply(theme, true); shell.VM.RefreshAppearance(); var root = (FrameworkElement)shell.Window.Content; root.LayoutTransform = Transform.Identity;root.IsHitTestVisible=false; shell.Window.Width = 360; shell.Window.Height = 480;
+            Appearance.Apply(theme, true); shell.VM.RefreshAppearance(); var root = (FrameworkElement)shell.Window.Content; root.LayoutTransform = Transform.Identity; root.IsHitTestVisible = false; shell.Window.Width = 360; shell.Window.Height = 480;
             var model = shell.VM.Networks[0]; model.Selected = true; await Layout(); shell.Tree.UpdateLayout();
             var item = (TreeViewItem)shell.Tree.ItemContainerGenerator.ContainerFromItem(model);
             var header = (Border)item.Template.FindName("Highlight", item);
             Assert(header.Background is SolidColorBrush color && color.Color.A == 0, "network header has a filled selection band");
-            Save(CaptureAtDpi(shell.Window,scale), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-network.png"));
+            Save(CaptureAtDpi(item, scale), Path.Combine(path, $"indicators-{theme}-{(int)(scale * 100)}.png"));
+            Save(CaptureAtDpi(shell.Window, scale), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-network.png"));
             model.Selected = false; model.Children[2].Selected = true; await Layout();
-            Save(CaptureAtDpi(shell.Window,scale), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-peer.png"));
+            Save(CaptureAtDpi(shell.Window, scale), Path.Combine(path, $"compact-{theme}-{(int)(scale * 100)}-peer.png"));
             model.Children[2].Selected = false;
         }
     }
@@ -91,9 +98,9 @@ public static class UiChecks
     static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     static async Task Layout() { await Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); await Task.Delay(60); }
     static RenderTargetBitmap Capture(FrameworkElement element) { element.UpdateLayout(); var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(element.ActualWidth)), Math.Max(1, (int)Math.Ceiling(element.ActualHeight)), 96, 96, PixelFormats.Pbgra32); bitmap.Render(element); return bitmap; }
-    static RenderTargetBitmap CaptureAtDpi(FrameworkElement element,double scale)
+    static RenderTargetBitmap CaptureAtDpi(FrameworkElement element, double scale)
     {
-        element.UpdateLayout();var image=new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth*scale),(int)Math.Ceiling(element.ActualHeight*scale),96*scale,96*scale,PixelFormats.Pbgra32);image.Render(element);return image;
+        element.UpdateLayout(); var image = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth * scale), (int)Math.Ceiling(element.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32); image.Render(element); return image;
     }
     static byte[] Pixels(BitmapSource source) { var pixels = new byte[source.PixelWidth * source.PixelHeight * 4]; source.CopyPixels(pixels, source.PixelWidth * 4, 0); return pixels; }
     static void Save(BitmapSource image, string path) { using var stream = File.Create(path); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); encoder.Save(stream); }

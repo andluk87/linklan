@@ -1,7 +1,7 @@
-LinkLAN 0.7.3 — Windows 10/11 x64, C# / WPF + Go
+LinkLAN 0.7.4 — Windows 10/11 x64, C# / WPF + Go
 
 Установка и обновление
-Используйте LinkLAN-Setup-x64-v0.7.3.exe либо распакуйте весь portable ZIP.
+Используйте LinkLAN-Setup-x64-v0.7.4.exe либо распакуйте весь portable ZIP.
 Рядом с LinkLAN.exe должны оставаться все DLL, LinkLAN-engine.exe и wintun.dll.
 .NET включён в пакет, отдельная установка не требуется.
 Не удаляйте %APPDATA%\LinkLAN\profile.dpapi: ключ устройства и сети сохраняются.
